@@ -5,7 +5,7 @@
 #include <string.h>
 #include <omp.h>
 
-const long ITER=500;
+const long ITER=5000;
 
 /* compute global residual, assuming ghost values are updated */
 double compute_residual(long N, double *u, double* f, double invhsqr) {
@@ -27,7 +27,7 @@ double compute_residual(long N, double *u, double* f, double invhsqr) {
 
 int main() {
 
-    long N = 10;
+    long N = 999;
     double h = 1.0/(N+1);
     double hsqr = h*h;
     double invhsqr = 1/hsqr;
@@ -37,9 +37,10 @@ int main() {
     double* unew = (double *) calloc(sizeof(double), (N+2)*(N+2));
     double* f = (double *) calloc(sizeof(double), (N+2)*(N+2));
 
-    // initialize boundary conditions
+    // initialize boundary conditions and right hand side (f)
     for (long i=0; i<N; i++) { 
         u[i*(N+2)+0] = u[i*(N+2)+N+1] = u[0*(N+2)+i] = u[(N+1)*(N+2)+i] = 0.0;
+	unew[i*(N+2)+0] = unew[i*(N+2)+N+1] = unew[0*(N+2)+i] = unew[(N+1)*(N+2)+i] = 0.0;
         for (long j=1; j<=N; j++) {
             f[(i+1)*(N+2)+j] = 1.0;
         }
@@ -50,10 +51,15 @@ int main() {
     res = res0;
     printf("Initial Residual: %g\n", res0);
 
+    /* timing */
+    double t = omp_get_wtime();
+
     for (long k=0; k<ITER && res/res0 > tol; k++) { // stop when reached max steps or residual decays enough
 
-        // Jacobi iteration to update nodes row-wise
-        for (long i=1; i <= N; i++) {
+        #pragma omp parallel num_threads(4)
+	#pragma omp for collapse(2)
+	// Jacobi iteration to update all nodes row-wise
+	for (long i=1; i <= N; i++) {
             for (long j=1; j <= N; j++) {
                 unew[i*(N+2)+j] = (hsqr*f[i*(N+2)+j] + u[(i-1)*(N+2)+j] + u[i*(N+2)+(j-1)] + u[(i+1)*(N+2)+j] + u[i*(N+2)+(j+1)])/4;
             }
@@ -72,13 +78,10 @@ int main() {
     
     }
 
-    // for (long i=1; i <= N; i++) {
-    //         for (long j=1; j<=N; j++) {
-    //             printf("%.6f\t", u[i*(N+2)+j]);
-    //         }
-    //         printf("\n");
-    //     }
-    //     printf("\n\n");
+
+    /* timing */
+    t = omp_get_wtime() - t;
+    printf("Time elapsed is %f.\n", t);
 
     free(u);
     free(unew);

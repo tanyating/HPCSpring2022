@@ -69,7 +69,7 @@ void f ( int n )
   int i;
   int *x;
 
-  x = ( int * ) malloc ( (n+1) * sizeof ( int ) );
+  x = ( int * ) malloc ( (n+1) * sizeof ( int ) ); // add one more space to the array (since the fibonacci sequence starts from 0 and ends at n)
 
   x[0] = 1;
   cout << "  " << 0 << "  " << x[0] << "\n";
@@ -83,7 +83,7 @@ void f ( int n )
     cout << "  " << i << "  " << x[i] << "\n";
   }
 
-  free(x);
+  free(x); // free x since it's dynamically allocated
 
   return;
 }
