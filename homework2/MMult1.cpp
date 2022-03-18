@@ -5,15 +5,17 @@
 #include <omp.h>
 #include "utils.h"
 
-#define BLOCK_SIZE 64
+#define BLOCK_SIZE 24
 
 // Note: matrices are stored in column major order; i.e. the array elements in
 // the (m x n) matrix C are stored in the sequence: {C_00, C_10, ..., C_m0,
 // C_01, C_11, ..., C_m1, C_02, ..., C_0n, C_1n, ..., C_mn}
 void MMult0(long m, long n, long k, double *a, double *b, double *c) {
+  #pragma omp parallel // parallelized version using OpenMP (also in column-first order) 
+  #pragma omp for collapse(2)
   for (long j = 0; j < n; j++) {
-    for (long p = 0; p < k; p++) {
-      for (long i = 0; i < m; i++) {
+    for (long i = 0; i < m; i++) {
+      for (long p = 0; p < k; p++) {
         double A_ip = a[i+p*m];
         double B_pj = b[p+j*k];
         double C_ij = c[i+j*m];
@@ -26,15 +28,21 @@ void MMult0(long m, long n, long k, double *a, double *b, double *c) {
 
 void MMult1(long m, long n, long k, double *a, double *b, double *c) {
   // TODO: See instructions below
-  int N = (int)(n/BLOCK_SIZE); // number of blocks in each dimension
   
-  // iterate over blocks
-  for (long J = 0; J < N; J++) {
-    for (long P = 0; P < N; P++) {
-      for (long I = 0; I < N; I++) {
+  // number of blocks in each dimension
+  long N1 = (long)(m/BLOCK_SIZE);
+  long N2 = (long)(n/BLOCK_SIZE);
+  long N3 = (long)(k/BLOCK_SIZE);
+  
+  // iterate over blocks and parallelize using OpenMP
+  #pragma omp parallel 
+  #pragma omp for collapse(2)
+  for (long J = 0; J < N2; J++) {
+    for (long I = 0; I < N1; I++) {
+	for (long P = 0; P < N3; P++) {
 
-        // compute block-block multiplication
-        for (long j = 0; j < BLOCK_SIZE; j++) {
+	// block-block multiplication
+	for (long j = 0; j < BLOCK_SIZE; j++) {
           for (long p = 0; p < BLOCK_SIZE; p++) {
             for (long i = 0; i < BLOCK_SIZE; i++) {
               double A_ip = a[I*BLOCK_SIZE+P*BLOCK_SIZE*m+i+p*m];
@@ -55,12 +63,11 @@ int main(int argc, char** argv) {
   const long PFIRST = BLOCK_SIZE;
   const long PLAST = 2000;
   const long PINC = std::max(50/BLOCK_SIZE,1) * BLOCK_SIZE; // multiple of BLOCK_SIZE
-  int hit = 0;
-  int count = 0;
+  int hit = 0; // total number of times to hit the peak FLOP-rate
+  int count = 0; // total count of experiments with different dimensions
 
   printf(" Dimension       Time    Gflop/s       GB/s        Error\n");
   for (long p = PFIRST; p < PLAST; p += PINC) {
-  // for (long p = 4; p < 5; p += 1) {
     long m = p, n = p, k = p;
     long NREPEATS = 1e9/(m*n*k)+1;
     double* a = (double*) aligned_malloc(m * k * sizeof(double)); // m x k
@@ -81,19 +88,14 @@ int main(int argc, char** argv) {
     Timer t;
     t.tic();
     for (long rep = 0; rep < NREPEATS; rep++) {
-      MMult1(m, n, k, a, b, c);
+	MMult1(m, n, k, a, b, c);
     }
 
-    // for (long i = 0; i < m*n; i++) printf("%.2f\t",c[i]);
-    // printf("\n");
-    // for (long i = 0; i < m*n; i++) printf("%.2f\t",c_ref[i]);
-    // printf("\n");
-    
     double time = t.toc();
     double flops = (2*m*n*k)*NREPEATS/1e9/time; // TODO: calculate from m, n, k, NREPEATS, time
     double bandwidth = (2*m*n+2*m*n*k)*sizeof(double)*NREPEATS/1e9/time; // TODO: calculate from m, n, k, NREPEATS, time
     printf("%10d %10f %10f %10f", p, time, flops, bandwidth);
-    if (abs(flops-3.4*4)<1e-6) hit++;
+    if (abs(flops-2.1*8)<1e-6) hit++;
     count++;
 
     double max_err = 0;

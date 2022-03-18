@@ -1,11 +1,14 @@
 #include <stdio.h>
-// #include "utils.h"
+#include "utils.h"
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
-#include <omp.h>
+//#include <omp.h>
+#ifdef _OPENMP_
+#include<omp.h> 
+#endif
 
-const long ITER=5000;
+const long ITER=1000;
 
 /* compute global residual, assuming ghost values are updated */
 double compute_residual(long N, double *u, double* f, double invhsqr) {
@@ -32,6 +35,7 @@ int main() {
     double hsqr = h*h;
     double invhsqr = 1/hsqr;
     double res, res0, tol = 1e-10;
+    int ntr = 16;
 
     double* u = (double *) calloc(sizeof(double), (N+2)*(N+2));
     double* unew = (double *) calloc(sizeof(double), (N+2)*(N+2));
@@ -46,17 +50,21 @@ int main() {
         }
     }
 
+    printf("Jacobi Method for N=%ld (%d threads):\n", N, ntr);
+    
     /* initial residual */
     res0 = compute_residual(N, u, f, invhsqr);
     res = res0;
     printf("Initial Residual: %g\n", res0);
 
     /* timing */
-    double t = omp_get_wtime();
+    //double t = omp_get_wtime();
+    Timer t;
+    t.tic();
 
     for (long k=0; k<ITER && res/res0 > tol; k++) { // stop when reached max steps or residual decays enough
 
-        #pragma omp parallel num_threads(4)
+        #pragma omp parallel num_threads(ntr)
 	#pragma omp for collapse(2)
 	// Jacobi iteration to update all nodes row-wise
 	for (long i=1; i <= N; i++) {
@@ -80,8 +88,8 @@ int main() {
 
 
     /* timing */
-    t = omp_get_wtime() - t;
-    printf("Time elapsed is %f.\n", t);
+    //t = omp_get_wtime() - t;
+    printf("Time elapsed is %f.\n", t.toc());
 
     free(u);
     free(unew);
