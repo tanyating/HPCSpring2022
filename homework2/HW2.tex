@@ -1,0 +1,231 @@
+\documentclass[11pt]{article}
+
+ \renewcommand*\familydefault{\sfdefault}
+%%
+%% to get Arial font as the sans serif font, uncomment following line:
+%% \renewcommand{\sfdefault}{phv} % phv is the Arial font
+\usepackage[sort,nocompress]{cite}
+\usepackage[small,bf,up]{caption}
+\renewcommand{\captionfont}{\footnotesize}
+\usepackage[left=1in,right=1in,top=1in,bottom=1in]{geometry}
+\usepackage{graphics,epsfig,graphicx,float,subfigure,color}
+%\usepackage{algorithm,algorithmic}
+\usepackage{amsmath,amssymb,amsbsy,amsfonts,amsthm}
+\usepackage{url}
+\usepackage{boxedminipage}
+\usepackage[sf,bf,tiny]{titlesec}
+ \usepackage[plainpages=false, colorlinks=true,
+   citecolor=blue, filecolor=blue, linkcolor=blue,
+   urlcolor=blue]{hyperref}
+
+\usepackage{algorithmicx}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xspace}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{sidecap}
+\usepackage{caption}
+\usepackage[numbered,framed]{matlab-prettifier}
+\lstset{
+  style      = Matlab-editor,
+}
+
+\lstset{
+basicstyle=\small\ttfamily,
+numbers=left,
+numbersep=5pt,
+xleftmargin=20pt,
+frame=tb,
+framexleftmargin=20pt
+}
+
+\usepackage{float}
+
+
+\lstset{
+basicstyle=\small\ttfamily,
+numbers=left,
+numbersep=5pt,
+xleftmargin=20pt,
+frame=tb,
+framexleftmargin=20pt
+}
+
+\renewcommand*\thelstnumber{\arabic{lstnumber}:}
+
+\DeclareCaptionFormat{mylst}{\hrule#1#2#3}
+\captionsetup[lstlisting]{format=mylst,labelfont=bf,singlelinecheck=off,labelsep=space}
+
+\usepackage{matlab-prettifier}
+\newcommand{\todo}[1]{\textcolor{red}{#1}}
+% see documentation for titlesec package
+% \titleformat{\section}{\large \sffamily \bfseries}
+\titlelabel{\thetitle.\,\,\,}
+
+\renewcommand{\baselinestretch}{0.994}
+\newcommand{\bs}{\boldsymbol}
+\newcommand{\alert}[1]{\textcolor{red}{#1}}
+\newcommand{\abs}[1]{\left|#1\right|}
+
+\setlength{\emergencystretch}{20pt}
+\usepackage[utf8]{inputenc}
+
+
+\begin{document}
+
+\begin{center}
+\vspace*{-2cm}
+
+\end{center}
+\vspace*{.5cm}
+\begin{center}
+\large \textbf{%%
+Spring 2022: High Performance Computing}\\
+\textbf{ Assignment 2 (Timing Report)}\\
+\large \textbf{%%
+Tanya Wang (yw3087)}\\
+\end{center}
+
+% ---------------------------------------------------------------
+
+\begin{enumerate}
+    \item {\bf [Finding Memory bugs]}
+    
+    
+    \item {\bf [Optimizing matrix-matrix multiplication]}
+    
+    Used machine/processor (\texttt{crunchy6} on CIMS server): AMD Opteron(TM) Processor 6272 with Bulldozer micro-architecture (64 CPUs/cores)\\
+    Clock Speed (frequency): $2.1$ GHz = $2.1\times 10^9$ cycle/s\\
+    Peak flop rate for CPU per core:
+        
+        $2.1\times 10^9$ cycle/s $\times$ $8$ flops/cycle = $16.8 \times 10^9$ FLOP/s = $16.8$ GFLOP/s per core\\
+    Since there are 64 cores, the total peak FLOP-rate = $16.8\times 64$ GFLOP/s = $1075.2$ GFLOP/s.\\
+   (L1d cache size for data: 16K bytes, L1 cacheline size: 64 bytes)
+    
+    \begin{enumerate}
+        \item Rearrange the nested loops ie. re-order the iterators $i$, $j$, and $p$ (dimension $N=256$):
+        
+            \begin{tabular}{c|c|c|c|c}
+           $order$ & Time(s) & Gflop/s & GB/s & Computation intensity ($\frac{Gflop/s}{GB/s}$) \\ \hline
+            ${j,i,p}$ & 2.948364 & 0.682842 & 5.484073 & 0.1245 \\
+            ${i,j,p}$ & 3.002136 & 0.670611 & 5.385846 & 0.1245 \\
+            ${i,p,j}$ & 29.763620 & 0.067642 & 0.543248 & 0.1245 \\
+            ${p,i,j}$ & 30.200751 & 0.066663 & 0.535385 & 0.1245 \\
+            ${p,j,i}$ & 0.895252 & 2.248827 & 18.060890 & 0.1245 \\
+            ${j,p,i}$ & 0.873151 & 2.305747 & 18.518027 & 0.1245 \\
+            
+      \end{tabular}
+      \begin{enumerate}
+                \item Observe that orders ${j,i,p}$ and ${i,j,p}$ are quite fast (quite short time, large flop rate and bandwidth) since they iterate through $i$ and $j$ first, so there's no slow memory request to $C_{ij}$ (fast memory loaded in cache) under iteration of $k$. This saves time since matrix-matrix multiplication will need to read and write to each $C_{ij}$ (request memory twice), but only read $A_{ip}$ and $B_{pj}$ each once.
+                \item Observe that orders ${p,j,i}$ and ${j,p,i}$ are even faster probably because they iterate through $j$ before $i$. So the loop arrangement follows the column-major storage of the matrix $C$ and thus more fast memory request from cache. (Still, we care about memory access to $C$ due to the read and write requests.)
+                \item But notice the computation intensity are the same, which are quite low (\textcolor{blue}{without block}). Also, no trials achieve peak FLOP-rate.
+                
+            \end{enumerate}
+        
+        \item \textcolor{blue}{Blocked} version:
+        
+        \begin{tabular}{c|c|c|c|c|c}
+           Block Size & Dimension & Time(s) & Gflop/s & GB/s & Computation intensity ($\frac{Gflop/s}{GB/s}$) \\ \hline
+            $8$ & 520 & 1.305957 & 1.722666 & 13.807832 & 0.1248 \\
+            $8$ & 1032 & 1.351827 & 1.626103 & 13.021430 & 0.1249 \\
+            $8$ & 1544 & 4.467050 & 1.647977 & 13.192354 & 0.1249 \\
+            $8$ & 1800 & 7.075623 & 1.648477 & 13.195141 & 0.1249 \\ \hline
+            \textcolor{blue}{$24$} & 504 & 0.749679 & 2.732349 & 21.902161 & 0.1248 \\
+            \textcolor{blue}{$24$} & 984 & 1.402090 & 2.718125 & 21.767100 & 0.1249 \\
+            \textcolor{blue}{$24$} & 1464 & 2.352890 & 2.667175 & 21.351976 & 0.1249 \\
+            \textcolor{blue}{$24$} & 1944 & 5.499728 & 2.671638 & 21.384095 & 0.1249 \\ \hline
+            $128$ & 640 & 1.107058 & 1.894347 & 15.178451 & 0.1248 \\
+            $128$ & 1408 & 2.795062 & 1.997315 & 15.989869 & 0.1249 \\
+            $128$ & 1920 & 7.078103 & 1.999939 & 16.007848 & 0.1249 \\ \hline
+            $256$ & 512 & 0.967455 & 2.219724 & 17.792477 & 0.1248 \\
+            $256$ & 1024 & 1.028906 & 2.087151 & 16.713517 & 0.1249 \\
+            $256$ & 1792 & 5.056281 & 2.276212 & 18.219860 & 0.1249 \\ \hline
+            \end{tabular}
+            \begin{enumerate}
+                \item Observe that the optimal block size is around \textcolor{blue}{$24$} (shortest run time, largest FLOP-rate and bandwidth). This makes sense since the fast memory (ie. L1 cache for data) is 16K bytes $= 2000$ double (8 bytes each). So we have the optimal size of $\frac{2000}{3}$ for a single block from each of the matrices $A$, $B$ and $C$ (to optimize blocked multiplication). So roughly the ideal dimension is $\sqrt{\frac{2000}{3}} \approx 25.82$, which is closest to $24$ (a multiple of $4$). 
+                
+                \item The computational intensity is always around $0.1248$, which is enhanced a little compared to the no-block version. Still, the FLOP-rate is far below maximum FLOP-rate.
+                
+            \end{enumerate}
+            
+            \item \textcolor{blue}{OpenMP} version (parallelize blocked version with optimal block size $24$):
+            
+            \begin{tabular}{c|c|c|c|c|c}
+           Block Size & Dimension & Time(s) & Gflop/s & GB/s & Computation intensity ($\frac{Gflop/s}{GB/s}$) \\ \hline
+            
+            \textcolor{blue}{$24$} & 24 & 4.394374 & 0.455128 & 3.792731 & 0.1200 \\
+            \textcolor{blue}{$24$} & 504 & 0.040586 & 50.470463 & 404.564822 & 0.1248 \\
+            \textcolor{blue}{$24$} & 984 & 0.043840 & 86.930593 & 696.151495 & 0.1249 \\
+            \textcolor{blue}{$24$} & 1464 & 0.097677 & 64.248181 & 514.336533 & 0.1249 \\
+            \textcolor{blue}{$24$} & 1944 & 0.391807 & 37.501323 & 300.164912 & 0.1249 \\ \hline
+            
+            \end{tabular}
+            \begin{enumerate}
+                \item Observe that except for the small dimension $24$ (when there's a relatively large overheads when using parallel computing), the OpenMP version of matrix-matrix multiplication in general shows a \textcolor{blue}{much shorter run time} and \textcolor{blue}{much larger FLOP-rate and bandwidth}.
+                \item The computational intensity stays the same as the blocked version (reach limit of bandwidth, already optimized by blocking).
+                \item The OpenMP version goes beyond the peak $16.8$ GFLOP/s FLOP-rate per core but not the peak FLOP-rate $1075.2$ GFLOP/s for 64 cores in total. It only achieves around $\frac{87}{1075.2} \approx 0.08$ of the total peak FLOP-rate.
+            \end{enumerate}
+            (Note I use collapsed parallel "for" loop for the first two iterators. See code for details.\\
+            Also I use flags \textcolor{blue}{\texttt{-march=native -O3}} for optimization level. See \texttt{Makefile}.)
+      
+      
+    \end{enumerate}
+    
+    
+    
+   \item {\bf [Finding OpenMP bugs]}
+   
+   \item {\bf [OpenMP version of 2D Jacobi/Gauss-Seidel smoothing]}
+   (Same machine as above)
+   \begin{enumerate}
+            \item For fixed number (say 4) of threads: The run time for Gauss Seidel method are in general longer than the run time for Jacobi method (N = 99, 999, and 9,999) for 1,000 iterations. This is because at each iteration, Jacobi method can be parallelized once among all nodes, but G-S method need to be parallelized twice based on the red-black coloring of the nodes.  
+            
+            
+            \item For fixed dimension (say N=99): G-S iteration shows a faster decay in residuals than Jacobi iteration. (But for large dimension N=999 and 9,999, residual for G-S method may be driven up at 1st iteration and the residuals have slow convergence for both methods)
+            
+            \item As we increase the number of threads, the run time for both methods would decrease (parallel scalability, in fact only weak scalability) especially for large dimension N=999 and 9,999 with relatively small parallel overheads.
+            
+            
+            \begin{tabular}{c|c|c|c}
+           Dimension & Iteration & Jacobi Residual & G-S Residual \\ \hline
+            
+            99 & 0 & 99 & 99  \\
+            99 & 201 & 77.3529 & 96.1772  \\
+            99 & 401 & 68.0275 & 77.5282  \\
+            99 & 601 & 60.8654 & 63.4029  \\
+            99 & 801 & 54.8348 & 52.004 \\ \hline
+            999 & 0 & 999 & 999  \\
+            999 & 201 & 977.355 & 1368.97  \\
+            999 & 401 & 968.03 & 1350.31  \\
+            999 & 601 & 960.867 & 1335.98  \\
+            999 & 801 & 954.826 & 1323.89 \\ \hline
+            9,999 & 0 & 9,999 & 9,999  \\
+            9,999 & 201 & 9977.35 & 14096.9  \\
+            9,999 & 401 & 9968.03 & 14078.2  \\
+            9,999 & 601 & 9960.87 & 14063.9  \\
+            9,999 & 801 & 9954.83 & 14051.8 \\ \hline
+            
+            \end{tabular}
+            
+            
+            \begin{tabular}{c|c|c|c}
+           Number of Threads & Dimension & Jacobi Time(s) for 1000 iterations & G-S Time(s) for 1000 iterations \\ \hline
+            
+            4 & 99 & 0.021692 & 0.030101 \\ 
+            4 & 999 & 1.696431 & 2.192770 \\
+            4 & 9,999 & 235.311756 & 318.239877 \\ \hline
+            16 & 99 & 0.027871 & 0.055576 \\ 
+            16 & 999 & 0.493446 & 0.540240 \\
+            16 & 9,999 & 82.415277 & 94.268781 \\ \hline
+            
+            \end{tabular}
+            
+            (Note: I used odd number of interior nodes $N$ to make sure the red-black coloring works.)
+            
+    \end{enumerate}
+   
+    
+\end{enumerate}
+
+\end{document}
