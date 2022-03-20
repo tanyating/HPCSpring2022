@@ -15,7 +15,7 @@ float a[VECLEN], b[VECLEN];
 float sum; // define sum as a global variable (shared among threads) and then do reduction on sum
 
 
-float dotprod ()
+void dotprod () // return type should be void
 {
 int i,tid;
 //float sum; // do NOT define a (private) sum local to each function call
