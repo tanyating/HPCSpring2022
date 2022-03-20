@@ -63,8 +63,6 @@ int main(int argc, char** argv) {
   const long PFIRST = BLOCK_SIZE;
   const long PLAST = 2000;
   const long PINC = std::max(50/BLOCK_SIZE,1) * BLOCK_SIZE; // multiple of BLOCK_SIZE
-  int hit = 0; // total number of times to hit the peak FLOP-rate
-  int count = 0; // total count of experiments with different dimensions
 
   printf(" Dimension       Time    Gflop/s       GB/s        Error\n");
   for (long p = PFIRST; p < PLAST; p += PINC) {
@@ -95,8 +93,6 @@ int main(int argc, char** argv) {
     double flops = (2*m*n*k)*NREPEATS/1e9/time; // TODO: calculate from m, n, k, NREPEATS, time
     double bandwidth = (2*m*n+2*m*n*k)*sizeof(double)*NREPEATS/1e9/time; // TODO: calculate from m, n, k, NREPEATS, time
     printf("%10d %10f %10f %10f", p, time, flops, bandwidth);
-    if (abs(flops-2.1*8)<1e-6) hit++;
-    count++;
 
     double max_err = 0;
     for (long i = 0; i < m*n; i++) max_err = std::max(max_err, fabs(c[i] - c_ref[i]));
@@ -106,7 +102,6 @@ int main(int argc, char** argv) {
     aligned_free(b);
     aligned_free(c);
   }
-  printf("About %.2f percentage of the peak FLOP-rate is achieved.\n", hit/count*100);
 
   return 0;
 }
