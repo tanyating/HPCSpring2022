@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <omp.h>
+long p = 4; // number of threads
 
 // Scan A array and write result into prefix_sum array;
 // use long data type to avoid overflow
@@ -17,12 +18,11 @@ void scan_omp(long* prefix_sum, const long* A, long n) {
   // TODO: implement multi-threaded OpenMP scan
 
   if (n == 0) return;
-  int p = 8; // number of threads
-  long m = ceil(n/p); // chunk size (static per thread)
+  long m = (long)(ceil(double(n)/p)); // chunk size (static per thread)
 
   #pragma parallel omp num_threads(p)
   //#pragma omp for schedule(static)
-  for (int j=0; j<p; j++) { // parallelize each of p chunks
+  for (long j=0; j<p; j++) { // parallelize each of p chunks
     #pragma omp task 
 {
     prefix_sum[j*m] = 0;
@@ -33,10 +33,9 @@ void scan_omp(long* prefix_sum, const long* A, long n) {
   }
 
   // serial correction
-  for (int j = 1; j < p; j++) {
-    double s = prefix_sum[j*m-1] + A[j*m-1];
+  for (long j = 1; j < p; j++) {
     for (long k=j*m; k<(j+1)*m && k<n; k++) {
-      prefix_sum[k] = prefix_sum[k] + s;
+      prefix_sum[k] = prefix_sum[k] + prefix_sum[j*m-1] + A[j*m-1];
     }
   }
 
@@ -58,6 +57,7 @@ int main() {
   printf("parallel-scan   = %fs\n", omp_get_wtime() - tt);
 
   long err = 0;
+  long est = 0;
   for (long i = 0; i < N; i++) err = std::max(err, std::abs(B0[i] - B1[i]));
   printf("error = %ld\n", err);
 
