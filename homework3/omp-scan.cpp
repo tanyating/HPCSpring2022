@@ -20,10 +20,11 @@ void scan_omp(long* prefix_sum, const long* A, long n) {
   if (n == 0) return;
   long m = (long)(ceil(double(n)/p)); // chunk size (static per thread)
 
-  #pragma parallel omp num_threads(p)
-  //#pragma omp for schedule(static)
+  #pragma omp parallel num_threads(p)
+{
+  #pragma omp for //schedule(static)
   for (long j=0; j<p; j++) { // parallelize each of p chunks
-    #pragma omp task 
+//    #pragma omp task 
 {
     prefix_sum[j*m] = 0;
     for (long k=j*m+1; k<(j+1)*m && k<n; k++) {
@@ -31,11 +32,12 @@ void scan_omp(long* prefix_sum, const long* A, long n) {
     }
 }
   }
-
+}
   // serial correction
   for (long j = 1; j < p; j++) {
+    long s = prefix_sum[j*m-1] + A[j*m-1]; // partial sums
     for (long k=j*m; k<(j+1)*m && k<n; k++) {
-      prefix_sum[k] = prefix_sum[k] + prefix_sum[j*m-1] + A[j*m-1];
+      prefix_sum[k] = prefix_sum[k] + s;
     }
   }
 
