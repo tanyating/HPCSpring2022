@@ -1,8 +1,8 @@
 #include <algorithm>
 #include <stdio.h>
 #include <math.h>
-// #include <omp.h>
-long p = 4; // number of threads
+#include <omp.h>
+long p = 8; // number of threads
 
 // Scan A array and write result into prefix_sum array;
 // use long data type to avoid overflow
@@ -22,7 +22,8 @@ void scan_omp(long* prefix_sum, const long* A, long n) {
 
   #pragma omp parallel num_threads(p)
 {
-  #pragma omp for //schedule(static)
+  
+  #pragma omp for schedule(static)
   for (long j=0; j<p; j++) { // parallelize each of p chunks
 //    #pragma omp task 
 {
@@ -32,32 +33,23 @@ void scan_omp(long* prefix_sum, const long* A, long n) {
     }
 }
   }
-// }
-  // serial correction
-  // for (long j = 1; j < p; j++) {
-  //   long s = prefix_sum[j*m-1] + A[j*m-1]; // partial sums
-  //   for (long k=j*m; k<(j+1)*m && k<n; k++) {
-  //     prefix_sum[k] = prefix_sum[k] + s;
-  //   }
-  // }
-  #pragma omp single 
+  #pragma omp single // add up partial sums in serial (one thread)
 {
   long s1 = 0;
   for (long j = 1; j < p; j++) {
     s1 += prefix_sum[j*m-1] + A[j*m-1];
-    prefix_sum[j*m] += s1; // partial sums
+    prefix_sum[j*m] += s1; // sum of partial sums
   }
 }
-#pragma omp barrier
-  //  #pragma omp parallel num_threads(p)
-// {
-  #pragma omp for //schedule(static)
+  #pragma omp barrier // wait till the partial sums (correction terms) are updated in serial
+  
+  #pragma omp for schedule(static)
   for (long j=1; j<p; j++) { // parallelize each of p chunks (except for the 1st chunk)
 //    #pragma omp task 
 {
-    // long s2 = prefix_sum[j*m];
+    long s2 = prefix_sum[j*m];
     for (long k=j*m+1; k<(j+1)*m && k<n; k++) {
-      prefix_sum[k] = prefix_sum[k] + prefix_sum[j*m];
+      prefix_sum[k] = prefix_sum[k] + s2; // add back the correction term
     }
 }
   }
@@ -74,13 +66,13 @@ int main() {
   long* B1 = (long*) malloc(N * sizeof(long));
   for (long i = 0; i < N; i++) A[i] = rand();
 
-  // double tt = omp_get_wtime();
+  double tt = omp_get_wtime();
   scan_seq(B0, A, N);
-  // printf("sequential-scan = %fs\n", omp_get_wtime() - tt);
+  printf("sequential-scan = %fs\n", omp_get_wtime() - tt);
 
-  // tt = omp_get_wtime();
+  tt = omp_get_wtime();
   scan_omp(B1, A, N);
-  // printf("parallel-scan   = %fs\n", omp_get_wtime() - tt);
+  printf("parallel-scan   = %fs\n", omp_get_wtime() - tt);
 
   long err = 0;
   long est = 0;
