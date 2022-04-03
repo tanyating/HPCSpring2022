@@ -1,0 +1,137 @@
+\documentclass[11pt]{article}
+
+ \renewcommand*\familydefault{\sfdefault}
+%%
+%% to get Arial font as the sans serif font, uncomment following line:
+%% \renewcommand{\sfdefault}{phv} % phv is the Arial font
+\usepackage[sort,nocompress]{cite}
+\usepackage[small,bf,up]{caption}
+\renewcommand{\captionfont}{\footnotesize}
+\usepackage[left=1in,right=1in,top=1in,bottom=1in]{geometry}
+\usepackage{graphics,epsfig,graphicx,float,subfigure,color}
+%\usepackage{algorithm,algorithmic}
+\usepackage{amsmath,amssymb,amsbsy,amsfonts,amsthm}
+\usepackage{url}
+\usepackage{boxedminipage}
+\usepackage[sf,bf,tiny]{titlesec}
+ \usepackage[plainpages=false, colorlinks=true,
+   citecolor=blue, filecolor=blue, linkcolor=blue,
+   urlcolor=blue]{hyperref}
+
+\usepackage{algorithmicx}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xspace}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{sidecap}
+\usepackage{caption}
+\usepackage[numbered,framed]{matlab-prettifier}
+\lstset{
+  style      = Matlab-editor,
+}
+
+\lstset{
+basicstyle=\small\ttfamily,
+numbers=left,
+numbersep=5pt,
+xleftmargin=20pt,
+frame=tb,
+framexleftmargin=20pt
+}
+
+\usepackage{float}
+
+
+\lstset{
+basicstyle=\small\ttfamily,
+numbers=left,
+numbersep=5pt,
+xleftmargin=20pt,
+frame=tb,
+framexleftmargin=20pt
+}
+
+\renewcommand*\thelstnumber{\arabic{lstnumber}:}
+
+\DeclareCaptionFormat{mylst}{\hrule#1#2#3}
+\captionsetup[lstlisting]{format=mylst,labelfont=bf,singlelinecheck=off,labelsep=space}
+
+\usepackage{matlab-prettifier}
+\newcommand{\todo}[1]{\textcolor{red}{#1}}
+% see documentation for titlesec package
+% \titleformat{\section}{\large \sffamily \bfseries}
+\titlelabel{\thetitle.\,\,\,}
+
+\renewcommand{\baselinestretch}{0.994}
+\newcommand{\bs}{\boldsymbol}
+\newcommand{\alert}[1]{\textcolor{red}{#1}}
+\newcommand{\abs}[1]{\left|#1\right|}
+
+\setlength{\emergencystretch}{20pt}
+\usepackage[utf8]{inputenc}
+
+
+\begin{document}
+
+\begin{center}
+\vspace*{-2cm}
+
+\end{center}
+\vspace*{.5cm}
+\begin{center}
+\large \textbf{%%
+Spring 2022: High Performance Computing}\\
+\textbf{ Assignment 3}\\
+\large \textbf{%%
+Tanya Wang (yw3087)}\\
+\end{center}
+
+% ---------------------------------------------------------------
+
+\begin{enumerate}
+    \item {\bf [Pitch your final project.]}
+    
+    
+    \item {\bf [Approximating Special Functions Using Taylor Series and Vectorization.]}
+    
+    \textbf{Observations:} 
+   The vectorized computations indeed reach order 12 of accuracy (error $\approx 6.927903e-12$), but with much less time than the reference computations or the serial taylor expansion.
+   
+    
+   \item {\bf [Parallel Scan in OpenMP.]}
+   
+   Used machine/processor (\texttt{crunchy6} on CIMS server): AMD Opteron(TM) Processor 6272 with Bulldozer micro-architecture (64 CPUs/cores)\\
+    Clock Speed (frequency): $2.1$ GHz = $2.1\times 10^9$ cycle/s\\
+    Peak flop rate for CPU per core:
+        $2.1\times 10^9$ cycle/s $\times$ $8$ flops/cycle = $16.8 \times 10^9$ FLOP/s = $16.8$ GFLOP/s per core\\
+    Since there are 64 cores, the total peak FLOP-rate = $16.8\times 64$ GFLOP/s = $1075.2$ GFLOP/s.\\
+   (L1d cache size for data: 16K bytes, L1 cacheline size: 64 bytes)
+   
+   \textbf{Implementation:} (N=100000000)
+\begin{enumerate}
+    \item Parallelize over $p$ threads by dividing the array $\vec v$ into $p$ chunks, and in each thread/chunk $j$ ($j = 1, \dots, p$) compute the partial sum over the interval $[\vec v_{k(j)},\vec v_{k(j+1)-1}]$. ($O(\frac{n}{p})$)
+    \item Compute the sum of partial sums in serial (one thread $p$ sums), which are the off-terms for each of the $p$ chunks.($O(p)$, assume $p<<n$ so that $p<<\frac{n}{p}$)
+    \item Add back the computed correction terms to each element of the array $\vec v$ in parallel among the $p$ threads. ($O(\frac{n}{p})$)
+\end{enumerate}
+   
+   \begin{tabular}{c|c|c}
+           Number of Threads & Sequential scan Time(s)& OMP scan Time(s) \\ \hline
+            
+            1 & 2.821169 & 1.687844 \\ \hline
+            2 & 2.805546 & 0.983987 \\ \hline
+            4 & 2.821544 & 0.561654 \\ \hline
+            8 & 2.812731 & 0.530490 \\ \hline
+            16 & 2.815975 & 0.433704 \\ \hline
+            
+            \end{tabular}
+            
+    \textbf{Observations:} (N=100000000)
+   \begin{enumerate}
+       \item When the number of threads double from 1 to 4, we can see the OMP scan time almost decreases by a factor of 2. This makes sense since we expect the complexity to be $O(\frac{n}{p})$.
+       \item But as we further increase the number of threads, the parallelization is only \textcolor{blue}{weakly scalable} since the OMP scan time decreases by a relatively small amount compared to the double in number of threads. This could be due to the relatively large overhead when doing the serial correction.
+   \end{enumerate}
+    
+\end{enumerate}
+
+\end{document}
