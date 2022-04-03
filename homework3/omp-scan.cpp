@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <stdio.h>
 #include <math.h>
-#include <omp.h>
+// #include <omp.h>
 long p = 4; // number of threads
 
 // Scan A array and write result into prefix_sum array;
@@ -32,14 +32,38 @@ void scan_omp(long* prefix_sum, const long* A, long n) {
     }
 }
   }
-}
+// }
   // serial correction
+  // for (long j = 1; j < p; j++) {
+  //   long s = prefix_sum[j*m-1] + A[j*m-1]; // partial sums
+  //   for (long k=j*m; k<(j+1)*m && k<n; k++) {
+  //     prefix_sum[k] = prefix_sum[k] + s;
+  //   }
+  // }
+  #pragma omp single 
+{
+  long s1 = 0;
   for (long j = 1; j < p; j++) {
-    long s = prefix_sum[j*m-1] + A[j*m-1]; // partial sums
-    for (long k=j*m; k<(j+1)*m && k<n; k++) {
-      prefix_sum[k] = prefix_sum[k] + s;
-    }
+    s1 += prefix_sum[j*m-1] + A[j*m-1];
+    prefix_sum[j*m] += s1; // partial sums
   }
+}
+#pragma omp barrier
+  //  #pragma omp parallel num_threads(p)
+// {
+  #pragma omp for //schedule(static)
+  for (long j=1; j<p; j++) { // parallelize each of p chunks (except for the 1st chunk)
+//    #pragma omp task 
+{
+    // long s2 = prefix_sum[j*m];
+    for (long k=j*m+1; k<(j+1)*m && k<n; k++) {
+      prefix_sum[k] = prefix_sum[k] + prefix_sum[j*m];
+    }
+}
+  }
+}
+
+
 
 }
 
@@ -50,13 +74,13 @@ int main() {
   long* B1 = (long*) malloc(N * sizeof(long));
   for (long i = 0; i < N; i++) A[i] = rand();
 
-  double tt = omp_get_wtime();
+  // double tt = omp_get_wtime();
   scan_seq(B0, A, N);
-  printf("sequential-scan = %fs\n", omp_get_wtime() - tt);
+  // printf("sequential-scan = %fs\n", omp_get_wtime() - tt);
 
-  tt = omp_get_wtime();
+  // tt = omp_get_wtime();
   scan_omp(B1, A, N);
-  printf("parallel-scan   = %fs\n", omp_get_wtime() - tt);
+  // printf("parallel-scan   = %fs\n", omp_get_wtime() - tt);
 
   long err = 0;
   long est = 0;
