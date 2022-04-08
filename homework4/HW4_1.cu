@@ -51,8 +51,8 @@ int main(int argc, char** argv) {
 
   const int blockSize = 1024, nStreams = 4;
 
-  const long PFIRST = 100;
-  const long PLAST = 1000;
+  const long PFIRST = 10;
+  const long PLAST = 51;
   const long PINC = 10;
 
   for (long p = PFIRST; p < PLAST; p += PINC) {
@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
 
     printf(" Dimension %ld:\n", n);
 
-    long NREPEATS = 1e9/(m*n)+1;
+    long NREPEATS = 1;//1e9/(m*n)+1;
     double *a, *b, *c;
     cudaMallocHost((void**)&a, m*n * sizeof(double));
     cudaMallocHost((void**)&b, n * sizeof(double));
@@ -70,20 +70,22 @@ int main(int argc, char** argv) {
     double* c_ref = (double*) malloc(m * sizeof(double));
 
     // Initialize matrices
+    #pragma omp parallel for
     for (long i = 0; i < m*n; i++) {
       a[i] = drand48();
     }
     
+    #pragma omp parallel for
     for (long i = 0; i < n; i++) {
       b[i] = drand48();
     }
 
+    #pragma omp parallel for
     for (long i=0; i < m; i++) {
       c_ref[i] = 0;
       c[i] = 0;
     }
 
-    printf("Initialization complete\n");
 
     double tt = omp_get_wtime();
     for (long rep = 0; rep < NREPEATS; rep++) { // Compute reference solution
