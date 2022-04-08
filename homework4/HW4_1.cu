@@ -5,27 +5,22 @@
 #include <omp.h>
 
 
-// Check errors and print GB/s
-void postprocess(const float *ref, const float *res, int n, float ms)
-{
-  bool passed = true;
-  for (int i = 0; i < n; i++)
-    if (res[i] != ref[i]) {
-      printf("%d %f %f\n", i, res[i], ref[i]);
-      printf("%25s\n", "*** FAILED ***");
-      passed = false;
-      break;
-    }
-  if (passed)
-    printf("%20.2f\n", 2 * n * sizeof(float) * 1e-6 * NUM_REPS / ms );
+// Check errors
+void Check_CUDA_Error(const char *message){
+  cudaError_t error = cudaGetLastError();
+  if(error!=cudaSuccess) {
+    fprintf(stderr,"ERROR: %s: %s\n", message, cudaGetErrorString(error) );
+    exit(-1);
+  }
 }
 
 void VMult0(long m, long n, double *a, double *b, double *c) {
     // A: input matrix of size m*n (row-first order)
     // b: input vector of size n*1
     // c: output vector of size m*1 (c = A*b)
-    
-    for (long i = 0; i < m; i++) {
+    #pragma omp parallel
+    #pragma omp for
+    for (long i = 0; i < m; i++) { // parallell each row (inner-prod) with OMP
       for (long j=0; j < n; j++) {
         double A_ij = a[i*n+j];
         double b_j = b[j];
@@ -61,11 +56,12 @@ int main(int argc, char** argv) {
   const long PLAST = 100000;
   const long PINC = 4*blockSize; // multiple of BLOCK_SIZE
 
-  printf(" Dimension       Time    Gflop/s       GB/s        Error\n");
   for (long p = PFIRST; p < PLAST; p += PINC) {
     long streamSize = p * blockSize;
     long m = streamSize * nStreams, n = streamSize * nStreams;
     long streamBytes = streamSize * sizeof(double);
+
+    printf(" Dimension %ld:\n", n);
 
     long NREPEATS = 1e9/(m*n)+1;
     double *a, *b, *c;
