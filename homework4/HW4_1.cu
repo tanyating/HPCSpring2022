@@ -103,7 +103,7 @@ int main(int argc, char** argv) {
     printf("GPU (no stream) Bandwidth = %f GB/s\n", (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
     
     double err = 0;
-    for (long i = 0; i < N; i++) err += fabs(c[i]-c_ref[i]);
+    for (long i = 0; i < n; i++) err += fabs(c[i]-c_ref[i]);
     printf("Error = %10e\n", err);
 
     cudaStream_t stream[nStreams];
@@ -128,7 +128,7 @@ int main(int argc, char** argv) {
     printf("GPU (4 streams) Bandwidth = %f GB/s\n", (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
 
     err = 0;
-    for (long i = 0; i < N; i++) err += fabs(c[i]-c_ref[i]);
+    for (long i = 0; i < n; i++) err += fabs(c[i]-c_ref[i]);
     printf("Error = %10e\n", err);
 
     cudaFree(a_d);
