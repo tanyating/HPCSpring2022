@@ -83,6 +83,8 @@ int main(int argc, char** argv) {
       c[i] = 0;
     }
 
+    printf("Initialization complete\n");
+
     double tt = omp_get_wtime();
     for (long rep = 0; rep < NREPEATS; rep++) { // Compute reference solution
       VMult0(m, n, a, b, c_ref);
@@ -92,14 +94,14 @@ int main(int argc, char** argv) {
     double *a_d, *b_d, *c_d;
     cudaMalloc(&a_d, m*n*sizeof(double));
     cudaMalloc(&b_d, n*sizeof(double));
-    cudaMalloc(&c_d, n*sizeof(double));
+    cudaMalloc(&c_d, m*sizeof(double));
 
     tt = omp_get_wtime();
     for (long rep = 0; rep < NREPEATS; rep++) {
       cudaMemcpyAsync(a_d, a, m*n*sizeof(double), cudaMemcpyHostToDevice);
       cudaMemcpyAsync(b_d, b, n*sizeof(double), cudaMemcpyHostToDevice);
       inn_prod<<<m/blockSize,blockSize>>>(m, n, a_d, b_d, c_d, 0);
-      cudaMemcpyAsync(c, c_d, n*sizeof(double), cudaMemcpyDeviceToHost);
+      cudaMemcpyAsync(c, c_d, m*sizeof(double), cudaMemcpyDeviceToHost);
       cudaDeviceSynchronize();
     }
     printf("GPU (no stream) Bandwidth = %f GB/s\n", (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
