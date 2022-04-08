@@ -1,11 +1,11 @@
 CXX = nvcc
-CXXFLAGS = -std=c++11 -O3 -march=native -fopenmp
+CXXFLAGS = -std=c++11 -O3 #-fopenmp
 
 TARGETS = $(basename $(wildcard *.cu))
 
 all : $(TARGETS)
 
-%:%.cu *.h
+%:%.cu
 	$(CXX) $(CXXFLAGS) $< $(LIBS) -o $@
 
 clean:
