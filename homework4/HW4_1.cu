@@ -1,4 +1,3 @@
-// g++ -std=c++11 -fopenmp -O3 -march=native MMult1.cpp && ./a.out
 #include <algorithm>
 #include <stdio.h>
 #include <math.h>
@@ -52,9 +51,9 @@ int main(int argc, char** argv) {
 
   const int blockSize = 1024, nStreams = 4;
 
-  const long PFIRST = 1000;
-  const long PLAST = 100000;
-  const long PINC = 4*blockSize; // multiple of BLOCK_SIZE
+  const long PFIRST = 100;
+  const long PLAST = 1000;
+  const long PINC = 10; // multiple of BLOCK_SIZE
 
   for (long p = PFIRST; p < PLAST; p += PINC) {
     long streamSize = p * blockSize;
@@ -110,6 +109,7 @@ int main(int argc, char** argv) {
     for (int i = 0; i < nStreams; ++i)
       cudaStreamCreate(&stream[i]);
 
+    
     tt = omp_get_wtime();
     for (int i = 0; i < nStreams; ++i) {
       int offset = i * streamSize;
