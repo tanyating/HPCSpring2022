@@ -1,5 +1,5 @@
 // g++ -std=c++11 -fopenmp -O3 -march=native MMult1.cpp && ./a.out
-
+#include <algorithm>
 #include <stdio.h>
 #include <math.h>
 #include <omp.h>
@@ -102,9 +102,9 @@ int main(int argc, char** argv) {
     }
     printf("GPU (no stream) Bandwidth = %f GB/s\n", (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
     
-    double max_err = 0;
-    for (long i = 0; i < n; i++) max_err = std::max(max_err, fabs(c[i] - c_ref[i]));
-    printf("Error = %10e\n", max_err);
+    double err = 0;
+    for (long i = 0; i < N; i++) err += fabs(c[i]-c_ref[i]);
+    printf("Error = %10e\n", err);
 
     cudaStream_t stream[nStreams];
     for (int i = 0; i < nStreams; ++i)
@@ -127,9 +127,9 @@ int main(int argc, char** argv) {
     cudaDeviceSynchronize();
     printf("GPU (4 streams) Bandwidth = %f GB/s\n", (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
 
-    double max_err = 0;
-    for (long i = 0; i < n; i++) max_err = std::max(max_err, fabs(c[i] - c_ref[i]));
-    printf("Error = %10e\n", max_err);
+    err = 0;
+    for (long i = 0; i < N; i++) err += fabs(c[i]-c_ref[i]);
+    printf("Error = %10e\n", err);
 
     cudaFree(a_d);
     cudaFree(b_d);
