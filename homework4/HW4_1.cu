@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 #include <omp.h>
 
@@ -21,24 +22,26 @@ void VMult0(long m, long n, double *a, double *b, double *c) {
     #pragma omp for
     for (long i = 0; i < m; i++) { // parallell each row (inner-prod) with OMP
       for (long j=0; j < n; j++) {
-        double A_ij = a[i*n+j];
-        double b_j = b[j];
-        double c_i = c[i];
-        c_i = c_i + A_ij * b_j;
-        c[i] = c_i;
+        //double A_ij = a[i*n+j];
+        //double b_j = b[j];
+        //double c_i = c[i];
+        //c_i = c_i + A_ij * b_j;
+        //c[i] = c_i;
+	c[i] = c[i] + a[i*n+j]*b[j];
       }
     }
 }
 
 // vector-vector inner product on GPU
 __global__ 
-void inn_prod(long m, long n, double *a, double *b, double *c, long offset){
+void inn_prod(long m, long n, double *a, double *b, double *c, double offset){
   // A: input matrix of size m*n (row-first order)
   // b: input vector of size n*1
   // c: output vector of size m*1 (c = A*b)
   
   long idx = offset + blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < m) {
+    c[idx] = 0;
     for (long j=0; j < n; j++) {
       c[idx] = c[idx] + a[idx*n+j]*b[j];
     }
@@ -52,15 +55,15 @@ int main(int argc, char** argv) {
   const int blockSize = 1024, nStreams = 4;
 
   const long PFIRST = 10;
-  const long PLAST = 51;
-  const long PINC = 10;
+  const long PLAST = PFIRST+1;
+  const long PINC = 2;
 
   for (long p = PFIRST; p < PLAST; p += PINC) {
     long streamSize = p * blockSize;
     long m = streamSize * nStreams, n = streamSize * nStreams;
     long streamBytes = streamSize * sizeof(double);
 
-    printf(" Dimension %ld:\n", n);
+    printf("\nDimension %ld:\n", n);
 
     long NREPEATS = 1;//1e9/(m*n)+1;
     double *a, *b, *c;
@@ -72,12 +75,12 @@ int main(int argc, char** argv) {
     // Initialize matrices
     #pragma omp parallel for
     for (long i = 0; i < m*n; i++) {
-      a[i] = drand48();
+      a[i] = 1;
     }
     
     #pragma omp parallel for
     for (long i = 0; i < n; i++) {
-      b[i] = drand48();
+      b[i] = 1;
     }
 
     #pragma omp parallel for
@@ -109,8 +112,11 @@ int main(int argc, char** argv) {
     printf("GPU (no stream) Bandwidth = %f GB/s\n", (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
     
     double err = 0;
-    for (long i = 0; i < n; i++) err += fabs(c[i]-c_ref[i]);
-    printf("Error = %10e\n", err);
+    for (long i = 0; i < m; i++) {
+      err = std::max(err, std::abs(c_ref[i] - c[i]));//err += fabs(c[i]-c_ref[i]);
+      c[i] = 0; // reinitialize c for stream computation
+    }
+    printf("Max Error = %10e\n", err);
 
     cudaStream_t stream[nStreams];
     for (int i = 0; i < nStreams; ++i)
@@ -135,9 +141,13 @@ int main(int argc, char** argv) {
     printf("GPU (4 streams) Bandwidth = %f GB/s\n", (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
 
     err = 0;
-    for (long i = 0; i < n; i++) err += fabs(c[i]-c_ref[i]);
-    printf("Error = %10e\n", err);
+    for (long i = 0; i < m; i++) err = std::max(err, std::abs(c_ref[i] - c[i]));//err += fabs(c[i]-c_ref[i]);
+    printf("Max Error = %10e\n", err);
 
+//    for (long i = 0; i < m; i++) {
+//      printf("cref[%ld] = %f\t",i,c_ref[i]);
+//      printf("c[%ld] = %f\n",i,c[i]);
+//    }
     cudaFree(a_d);
     cudaFree(b_d);
     cudaFree(c_d);
