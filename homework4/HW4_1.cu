@@ -23,9 +23,9 @@ void VMult0(long m, long n, double *a, double *b, double *c) {
       for (long j=0; j < n; j++) {
         double A_ij = a[i*n+j];
         double b_j = b[j];
-        double c_j = c[j];
-        c_j = c_j + A_ij * b_j;
-        c[j] = c_j;
+        double c_i = c[i];
+        c_i = c_i + A_ij * b_j;
+        c[i] = c_i;
       }
     }
 }
@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
 
   const long PFIRST = 100;
   const long PLAST = 1000;
-  const long PINC = 10; // multiple of BLOCK_SIZE
+  const long PINC = 10;
 
   for (long p = PFIRST; p < PLAST; p += PINC) {
     long streamSize = p * blockSize;
@@ -66,8 +66,8 @@ int main(int argc, char** argv) {
     double *a, *b, *c;
     cudaMallocHost((void**)&a, m*n * sizeof(double));
     cudaMallocHost((void**)&b, n * sizeof(double));
-    cudaMallocHost((void**)&c, n * sizeof(double));
-    double* c_ref = (double*) malloc(n * sizeof(double));
+    cudaMallocHost((void**)&c, m * sizeof(double));
+    double* c_ref = (double*) malloc(m * sizeof(double));
 
     // Initialize matrices
     for (long i = 0; i < m*n; i++) {
@@ -76,6 +76,9 @@ int main(int argc, char** argv) {
     
     for (long i = 0; i < n; i++) {
       b[i] = drand48();
+    }
+
+    for (long i=0; i < m; i++) {
       c_ref[i] = 0;
       c[i] = 0;
     }
