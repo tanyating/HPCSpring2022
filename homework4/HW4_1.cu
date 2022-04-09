@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
   const int blockSize = 1024, nStreams = 4;
 
   const long PFIRST = 10;
-  const long PLAST = PFIRST+1;
+  const long PLAST = 21;
   const long PINC = 2;
 
   for (long p = PFIRST; p < PLAST; p += PINC) {
@@ -71,12 +71,12 @@ int main(int argc, char** argv) {
     // Initialize matrix and vectors
     #pragma omp parallel for
     for (long i = 0; i < m*n; i++) {
-      a[i] = 0.5;
+      a[i] = 1e-5;
     }
     
     #pragma omp parallel for
     for (long i = 0; i < n; i++) {
-      b[i] = 0.5;
+      b[i] = 1e-5;
     }
 
     #pragma omp parallel for

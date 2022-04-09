@@ -115,10 +115,9 @@ int main() {
         unew = utmp;
 
     }
-    printf("CPU time elapsed is %f.\n", omp_get_wtime() - tt);
+    printf("GPU time elapsed is %f.\n", omp_get_wtime() - tt);
 
     double err = 0;
-    for (long i = 0; i < m; i++) err = std::max(err, std::abs(u_ref[i] - u[i]));
     for (long i = 1; i <= N; i++){
         for (long j = 1; j <= N; j++) {
             err = std::max(err, std::abs(u_ref[i*(N+2)+j] - u[i*(N+2)+j]));
