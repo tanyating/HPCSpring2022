@@ -14,6 +14,7 @@ void Check_CUDA_Error(const char *message){
   }
 }
 
+// reference Matrix-vector multiplication on CPU (with OMP)
 void VMult0(long m, long n, double *a, double *b, double *c) {
     // A: input matrix of size m*n (row-first order)
     // b: input vector of size n*1
@@ -26,7 +27,7 @@ void VMult0(long m, long n, double *a, double *b, double *c) {
     }
 }
 
-// vector-vector inner product on GPU
+// kernel function for inner product on GPU
 __global__ 
 void inn_prod(long m, long n, double *a, double *b, double *c, long offset){
   // A: input matrix of size m*n (row-first order)
@@ -66,7 +67,7 @@ int main(int argc, char** argv) {
     cudaMallocHost((void**)&c, m * sizeof(double));
     double* c_ref = (double*) malloc(m * sizeof(double));
 
-    // Initialize matrices
+    // Initialize matrix and vectors
     #pragma omp parallel for
     for (long i = 0; i < m*n; i++) {
       a[i] = 0.5;
@@ -96,18 +97,18 @@ int main(int argc, char** argv) {
     cudaMalloc(&c_d, m*sizeof(double));
 
     tt = omp_get_wtime();
-    for (long rep = 0; rep < NREPEATS; rep++) {
+    for (long rep = 0; rep < NREPEATS; rep++) { // Compute on GPU (1 stream)
       cudaMemcpyAsync(a_d, a, m*n*sizeof(double), cudaMemcpyHostToDevice);
       cudaMemcpyAsync(b_d, b, n*sizeof(double), cudaMemcpyHostToDevice);
       inn_prod<<<m/blockSize,blockSize>>>(m, n, a_d, b_d, c_d, 0);
       cudaMemcpyAsync(c, c_d, m*sizeof(double), cudaMemcpyDeviceToHost);
       cudaDeviceSynchronize();
     }
-    printf("GPU (no stream) Bandwidth = %f GB/s\n", (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
+    printf("GPU (1 stream) Bandwidth = %f GB/s\n", (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
     
     double err = 0;
     for (long i = 0; i < m; i++) {
-      err = std::max(err, std::abs(c_ref[i] - c[i]));//err += fabs(c[i]-c_ref[i]);
+      err = std::max(err, std::abs(c_ref[i] - c[i]));
       c[i] = 0; // reinitialize c for stream computation
     }
     printf("Max Error = %10e\n", err);
@@ -118,7 +119,7 @@ int main(int argc, char** argv) {
 
     
     tt = omp_get_wtime();
-    for (int i = 0; i < nStreams; ++i) {
+    for (int i = 0; i < nStreams; ++i) { // Compute on GPU (multiple streams)
       int offset = i * streamSize;
       cudaMemcpyAsync(&a_d[offset*n], &a[offset*n],
                                 streamBytes*n, cudaMemcpyHostToDevice,
@@ -132,16 +133,13 @@ int main(int argc, char** argv) {
                                 stream[i]);
     }
     cudaDeviceSynchronize();
-    printf("GPU (4 streams) Bandwidth = %f GB/s\n", (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
+    printf("GPU (%d streams) Bandwidth = %f GB/s\n", nStreams, (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
 
     err = 0;
-    for (long i = 0; i < m; i++) err = std::max(err, std::abs(c_ref[i] - c[i]));//err += fabs(c[i]-c_ref[i]);
+    for (long i = 0; i < m; i++) err = std::max(err, std::abs(c_ref[i] - c[i]));
     printf("Max Error = %10e\n", err);
 
-//    for (long i = 0; i < m; i++) {
-//      printf("cref[%ld] = %f\t",i,c_ref[i]);
-//      printf("c[%ld] = %f\n",i,c[i]);
-//    }
+
     cudaFree(a_d);
     cudaFree(b_d);
     cudaFree(c_d);
