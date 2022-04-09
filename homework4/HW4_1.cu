@@ -18,23 +18,17 @@ void VMult0(long m, long n, double *a, double *b, double *c) {
     // A: input matrix of size m*n (row-first order)
     // b: input vector of size n*1
     // c: output vector of size m*1 (c = A*b)
-    #pragma omp parallel
-    #pragma omp for
+    #pragma omp parallel for
     for (long i = 0; i < m; i++) { // parallell each row (inner-prod) with OMP
       for (long j=0; j < n; j++) {
-        //double A_ij = a[i*n+j];
-        //double b_j = b[j];
-        //double c_i = c[i];
-        //c_i = c_i + A_ij * b_j;
-        //c[i] = c_i;
-	c[i] = c[i] + a[i*n+j]*b[j];
+	      c[i] = c[i] + a[i*n+j]*b[j];
       }
     }
 }
 
 // vector-vector inner product on GPU
 __global__ 
-void inn_prod(long m, long n, double *a, double *b, double *c, double offset){
+void inn_prod(long m, long n, double *a, double *b, double *c, long offset){
   // A: input matrix of size m*n (row-first order)
   // b: input vector of size n*1
   // c: output vector of size m*1 (c = A*b)
@@ -65,7 +59,7 @@ int main(int argc, char** argv) {
 
     printf("\nDimension %ld:\n", n);
 
-    long NREPEATS = 1;//1e9/(m*n)+1;
+    long NREPEATS = 1;//large dimension, only one repeat
     double *a, *b, *c;
     cudaMallocHost((void**)&a, m*n * sizeof(double));
     cudaMallocHost((void**)&b, n * sizeof(double));
@@ -75,18 +69,18 @@ int main(int argc, char** argv) {
     // Initialize matrices
     #pragma omp parallel for
     for (long i = 0; i < m*n; i++) {
-      a[i] = 1;
+      a[i] = 0.5;
     }
     
     #pragma omp parallel for
     for (long i = 0; i < n; i++) {
-      b[i] = 1;
+      b[i] = 0.5;
     }
 
     #pragma omp parallel for
     for (long i=0; i < m; i++) {
-      c_ref[i] = 0;
-      c[i] = 0;
+      c_ref[i] = 0.;
+      c[i] = 0.;
     }
 
 
