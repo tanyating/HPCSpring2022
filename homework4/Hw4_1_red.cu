@@ -70,9 +70,9 @@ reduction_sum(double * sum, double * a , long N){
 int main(int argc, char** argv) {
 
 
-  const long PFIRST = 8;
-  const long PLAST = 11;
-  const long PINC = 2;
+  const long PFIRST = 4;
+  const long PLAST = PFIRST+1;
+  const long PINC = 16;
 
   for (long p = PFIRST; p < PLAST; p += PINC) {
     
@@ -125,6 +125,7 @@ int main(int argc, char** argv) {
       cudaMemcpyAsync(a_d, a, m*n*sizeof(double), cudaMemcpyHostToDevice);
       cudaMemcpyAsync(b_d, b, n*sizeof(double), cudaMemcpyHostToDevice);
       smult<<<GridDim,BlockDim>>>(m, n, a_d, b_d, tmp_d, 0);
+      cudaDeviceSynchronize();
       for (long i=0; i<m; i++){
           reduction_sum<<<m/BLOCK_SIZE,BLOCK_SIZE>>>(c_d, (tmp_d+i*n), n);
       }
