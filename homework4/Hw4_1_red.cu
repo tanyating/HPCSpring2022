@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
 
   for (long p = PFIRST; p < PLAST; p += PINC) {
     
-    const int blockSizeX = 32, blockSizeY = 32;
+    const int blockSizeX = 1, blockSizeY = 1;
     long m = p * blockSizeX, n = p * blockSizeY;
     dim3 GridDim(p, p, 1);
     dim3 BlockDim(blockSizeX, blockSizeY, 1);
@@ -84,8 +84,9 @@ int main(int argc, char** argv) {
     printf("\nDimension %ld:\n", n);
 
     long NREPEATS = 1;//large dimension, only one repeat
-    double *a, *b, *c;
+    double *a, *b, *c, *tmp;
     cudaMallocHost((void**)&a, m*n * sizeof(double));
+    cudaMallocHost((void**)&tmp, m*n * sizeof(double));
     cudaMallocHost((void**)&b, n * sizeof(double));
     cudaMallocHost((void**)&c, m * sizeof(double));
     double* c_ref = (double*) malloc(m * sizeof(double));
@@ -93,12 +94,12 @@ int main(int argc, char** argv) {
     // Initialize matrix and vectors
     #pragma omp parallel for
     for (long i = 0; i < m*n; i++) {
-      a[i] = 1e-5;
+      a[i] = 1;
     }
     
     #pragma omp parallel for
     for (long i = 0; i < n; i++) {
-      b[i] = 1e-5;
+      b[i] = 1;
     }
 
     #pragma omp parallel for
@@ -125,6 +126,7 @@ int main(int argc, char** argv) {
       cudaMemcpyAsync(a_d, a, m*n*sizeof(double), cudaMemcpyHostToDevice);
       cudaMemcpyAsync(b_d, b, n*sizeof(double), cudaMemcpyHostToDevice);
       smult<<<GridDim,BlockDim>>>(m, n, a_d, b_d, tmp_d, 0);
+      cudaMemcpyAsync(tmp, tmp_d, m*n*sizeof(double), cudaMemcpyDeviceToHost);
       cudaDeviceSynchronize();
       for (long i=0; i<m; i++){
           reduction_sum<<<m/BLOCK_SIZE,BLOCK_SIZE>>>(c_d, (tmp_d+i*n), n);
@@ -141,6 +143,24 @@ int main(int argc, char** argv) {
     }
     printf("Max Error = %10e\n", err);
 
+    printf("\nIntermidate matrix (tmp):\n");
+    for (long i=0; i < m; i++) {
+        for (long j=0; j < n; j++) {
+            printf("%e\t", tmp[i*n+j]);
+        }
+        printf("\n");
+    }
+
+    printf("\nresulting c:\n");
+    for (long j=0; j < n; j++) {
+        printf("%e\t", c[j]);
+    }
+
+    printf("\nresulting c:\n");
+    for (long j=0; j < n; j++) {
+        printf("%e\t", c_ref[j]);
+    }
+
 
     cudaFree(a_d);
     cudaFree(b_d);
@@ -150,6 +170,7 @@ int main(int argc, char** argv) {
     cudaFreeHost(a);
     cudaFreeHost(b);
     cudaFreeHost(c);
+    cudaFreeHost(tmp);
     free(c_ref);
   }
 
