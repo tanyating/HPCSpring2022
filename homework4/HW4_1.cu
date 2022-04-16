@@ -50,8 +50,8 @@ int main(int argc, char** argv) {
 
   const int blockSize = 1024, nStreams = 4;
 
-  const long PFIRST = 10;
-  const long PLAST = 21;
+  const long PFIRST = 4;
+  const long PLAST = 10;
   const long PINC = 2;
 
   for (long p = PFIRST; p < PLAST; p += PINC) {
