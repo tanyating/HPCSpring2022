@@ -5,7 +5,7 @@
 #include <omp.h>
 #include <stdlib.h>
 
-const long BLOCK_SIZE = 1024;
+const long BLOCK_SIZE = 32;
 // Check errors
 void Check_CUDA_Error(const char *message){
   cudaError_t error = cudaGetLastError();
@@ -45,7 +45,7 @@ void smult(long m, long n, double *a, double *b, double *c, long offset){
 
 __global__ void 
 reduction_sum(double * sum, double * a , long N){
-    
+    //const long BLOCK_SIZE = N; 
     __shared__ double smem[BLOCK_SIZE];
     int idx = (blockIdx.x) * blockDim.x + threadIdx.x;
 
@@ -63,20 +63,23 @@ reduction_sum(double * sum, double * a , long N){
         __syncthreads();
     }
     // write to global memory
-    if (threadIdx.x == 0) sum[blockIdx.x] = smem[threadIdx.x];
+    if (threadIdx.x == 0){ 
+	sum[blockIdx.x] = smem[threadIdx.x];
+	//printf("\nidx: %d, sum: %e\n",blockIdx.x,sum[blockIdx.x]);
+}
 }
 
 
 int main(int argc, char** argv) {
 
 
-  const long PFIRST = 4;
+  const long PFIRST = 10;
   const long PLAST = PFIRST+1;
   const long PINC = 16;
 
   for (long p = PFIRST; p < PLAST; p += PINC) {
     
-    const int blockSizeX = 1, blockSizeY = 1;
+    const int blockSizeX = 32, blockSizeY = 32;
     long m = p * blockSizeX, n = p * blockSizeY;
     dim3 GridDim(p, p, 1);
     dim3 BlockDim(blockSizeX, blockSizeY, 1);
@@ -128,22 +131,26 @@ int main(int argc, char** argv) {
       smult<<<GridDim,BlockDim>>>(m, n, a_d, b_d, tmp_d, 0);
       cudaMemcpyAsync(tmp, tmp_d, m*n*sizeof(double), cudaMemcpyDeviceToHost);
       cudaDeviceSynchronize();
-    //   for (long i=0; i<m; i++){
-    //       reduction_sum<<<m/BLOCK_SIZE,BLOCK_SIZE>>>(c_d, (tmp_d+i*n), n);
-    //   }
-      reduction_sum<<<m/BLOCK_SIZE,BLOCK_SIZE>>>(c_d, a_d, n);
+      for (long i=0; i<m; i++){
+          reduction_sum<<<1,n>>>((c_d+i), (tmp_d+i*n), n);
+      }
+    //  reduction_sum<<<m/BLOCK_SIZE,BLOCK_SIZE>>>(c_d, a_d, n);
+      //reduction_sum<<<1,n>>>(c_d, b_d, n);
+      //printf("test sum: %e\n",c_d[0]);
       cudaMemcpyAsync(c, c_d, m*sizeof(double), cudaMemcpyDeviceToHost);
+      //printf("test sum: %e\n",c[0]);
       cudaDeviceSynchronize();
+      //printf("test sum: %e\n",c[0]);
     }
     printf("GPU (1 stream) Bandwidth = %f GB/s\n", (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
     
     double err = 0;
     for (long i = 0; i < m; i++) {
       err = std::max(err, std::abs(c_ref[i] - c[i]));
-      c[i] = 0; // reinitialize c for stream computation
+      //c[i] = 0; // reinitialize c for stream computation
     }
     printf("Max Error = %10e\n", err);
-
+/*
     printf("\nIntermidate matrix (tmp):\n");
     for (long i=0; i < m; i++) {
         for (long j=0; j < n; j++) {
@@ -161,7 +168,7 @@ int main(int argc, char** argv) {
     for (long j=0; j < n; j++) {
         printf("%e\t", c_ref[j]);
     }
-    
+  */  
 
 
     cudaFree(a_d);
