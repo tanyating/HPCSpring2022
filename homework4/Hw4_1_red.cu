@@ -5,7 +5,7 @@
 #include <omp.h>
 #include <stdlib.h>
 
-
+const long BLOCK_SIZE = 1024;
 // Check errors
 void Check_CUDA_Error(const char *message){
   cudaError_t error = cudaGetLastError();
@@ -69,7 +69,6 @@ reduction_sum(double * sum, double * a , long N){
 
 int main(int argc, char** argv) {
 
-  const int blockSizeX = 32, blockSizeY = 32;
 
   const long PFIRST = 8;
   const long PLAST = 11;
@@ -127,7 +126,7 @@ int main(int argc, char** argv) {
       cudaMemcpyAsync(b_d, b, n*sizeof(double), cudaMemcpyHostToDevice);
       smult<<<GridDim,BlockDim>>>(m, n, a_d, b_d, tmp_d, 0);
       for (long i=0; i<m; i++){
-          reduction_sum<<<m/blockSizeX,blockSizeX>>>(c_d, (tmp_d+i*n), n);
+          reduction_sum<<<m/BLOCK_SIZE,BLOCK_SIZE>>>(c_d, (tmp_d+i*n), n);
       }
       cudaMemcpyAsync(c, c_d, m*sizeof(double), cudaMemcpyDeviceToHost);
       cudaDeviceSynchronize();
