@@ -128,9 +128,10 @@ int main(int argc, char** argv) {
       smult<<<GridDim,BlockDim>>>(m, n, a_d, b_d, tmp_d, 0);
       cudaMemcpyAsync(tmp, tmp_d, m*n*sizeof(double), cudaMemcpyDeviceToHost);
       cudaDeviceSynchronize();
-      for (long i=0; i<m; i++){
-          reduction_sum<<<1,n>>>(c_d, (tmp_d+i*n), n);
-      }
+    //   for (long i=0; i<m; i++){
+    //       reduction_sum<<<m/BLOCK_SIZE,BLOCK_SIZE>>>(c_d, (tmp_d+i*n), n);
+    //   }
+      reduction_sum<<<m/BLOCK_SIZE,BLOCK_SIZE>>>(c_d, a_d, n);
       cudaMemcpyAsync(c, c_d, m*sizeof(double), cudaMemcpyDeviceToHost);
       cudaDeviceSynchronize();
     }
@@ -160,6 +161,7 @@ int main(int argc, char** argv) {
     for (long j=0; j < n; j++) {
         printf("%e\t", c_ref[j]);
     }
+    
 
 
     cudaFree(a_d);
