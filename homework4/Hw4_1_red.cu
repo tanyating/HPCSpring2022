@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
     
     #pragma omp parallel for
     for (long i = 0; i < n; i++) {
-      b[i] = 1;
+      b[i] = 2;
     }
 
     #pragma omp parallel for
@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
       cudaMemcpyAsync(tmp, tmp_d, m*n*sizeof(double), cudaMemcpyDeviceToHost);
       cudaDeviceSynchronize();
       for (long i=0; i<m; i++){
-          reduction_sum<<<m/BLOCK_SIZE,BLOCK_SIZE>>>(c_d, (tmp_d+i*n), n);
+          reduction_sum<<<1,n>>>(c_d, (tmp_d+i*n), n);
       }
       cudaMemcpyAsync(c, c_d, m*sizeof(double), cudaMemcpyDeviceToHost);
       cudaDeviceSynchronize();
@@ -156,7 +156,7 @@ int main(int argc, char** argv) {
         printf("%e\t", c[j]);
     }
 
-    printf("\nresulting c:\n");
+    printf("\nresulting cref:\n");
     for (long j=0; j < n; j++) {
         printf("%e\t", c_ref[j]);
     }
