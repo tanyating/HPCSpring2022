@@ -44,8 +44,7 @@ void jacobi_kernel(long N, double hsqr, double *u, double *unew, double *f, long
 
     long i = offset + blockIdx.x * blockDim.x + threadIdx.x;
     long j = offset + blockIdx.y * blockDim.y + threadIdx.y;
-    //printf("\nkernel hsqr:%e",hsqr);
-    if (i>=1 && i<=N && j >=1 && j>=N){
+    if (i>=1 && i<=N && j>=1 && j<=N){
         unew[i*(N+2)+j] = (hsqr*f[i*(N+2)+j] + u[(i-1)*(N+2)+j] + u[i*(N+2)+(j-1)] + u[(i+1)*(N+2)+j] + u[i*(N+2)+(j+1)])/4;
     }
 
@@ -59,6 +58,9 @@ int main() {
     long N = 30 * blockSizeX - 2;
     dim3 GridDim((N+2)/blockSizeX, (N+2)/blockSizeY, 1);
     dim3 BlockDim(blockSizeX, blockSizeY, 1);
+    //long N = 10;
+    //dim3 GridDim(1,1,1);
+    //dim3 BlockDim(N+2,N+2,1);
 
     double h = 1.0/(N+1);
     double hsqr = h*h;
