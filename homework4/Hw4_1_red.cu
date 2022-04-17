@@ -5,7 +5,7 @@
 #include <omp.h>
 #include <stdlib.h>
 
-const long BLOCK_SIZE = 16;
+const long BLOCK_SIZE = 1024;
 // Check errors
 void Check_CUDA_Error(const char *message){
   cudaError_t error = cudaGetLastError();
@@ -45,7 +45,7 @@ void smult(long m, long n, double *a, double *b, double *c, long offset){
 
 __global__ void 
 reduction_sum(double * sum, double * a , long N){
-    //const long BLOCK_SIZE = N; 
+//    printf("yes\n");
     __shared__ double smem[BLOCK_SIZE];
     int idx = (blockIdx.x) * blockDim.x + threadIdx.x;
 
@@ -67,6 +67,7 @@ reduction_sum(double * sum, double * a , long N){
     // write to global memory
     if (threadIdx.x == 0){ 
 	sum[blockIdx.x] = smem[threadIdx.x];
+        //printf("yes\n");
 //	if(N>=BLOCK_SIZE) printf("\nN:%ld, idx: %d, sum: %e\n",N,blockIdx.x,sum[blockIdx.x]);
 }
 }
@@ -83,8 +84,8 @@ int main(int argc, char** argv) {
     
     const int blockSizeX = BLOCK_SIZE, blockSizeY =BLOCK_SIZE;
     long m = p * blockSizeX, n = p * blockSizeY;
-    dim3 GridDim(p, p, 1);
-    dim3 BlockDim(blockSizeX, blockSizeY, 1);
+    dim3 GridDim(m/32, n/32, 1);
+    dim3 BlockDim(32, 32, 1);
 
     printf("\nDimension %ld:\n", n);
 
@@ -95,26 +96,26 @@ int main(int argc, char** argv) {
     cudaMallocHost((void**)&b, n * sizeof(double));
     cudaMallocHost((void**)&c, m * sizeof(double));
     double* c_ref = (double*) malloc(m * sizeof(double));
-
+    //printf("Initialize complete\n");
     // Initialize matrix and vectors
     #pragma omp parallel for
     for (long i = 0; i < m*n; i++) {
       a[i] = 1;
-      c[i] = 0.;
+      //c[i] = 0.;
     }
     
     #pragma omp parallel for
     for (long i = 0; i < n; i++) {
-      b[i] = 2;
+      b[i] = 1;
     }
 
     #pragma omp parallel for
     for (long i=0; i < m; i++) {
       c_ref[i] = 0.;
-    //   c[i] = 0.;
+      c[i] = 0.;
     }
 
-
+    //printf("Initialize complete\n");
     double tt = omp_get_wtime();
     for (long rep = 0; rep < NREPEATS; rep++) { // Compute reference solution
       VMult0(m, n, a, b, c_ref);
@@ -133,18 +134,21 @@ int main(int argc, char** argv) {
       cudaMemcpyAsync(b_d, b, n*sizeof(double), cudaMemcpyHostToDevice);
       smult<<<GridDim,BlockDim>>>(m, n, a_d, b_d, a_d, 0);
     //   cudaMemcpyAsync(tmp, tmp_d, m*n*sizeof(double), cudaMemcpyDeviceToHost);
-      cudaDeviceSynchronize();
+      //cudaDeviceSynchronize();
       for (long i=0; i<m; i++){
           long j = n;
           while (j>BLOCK_SIZE){
           //for (long j=n; j>0; j /= BLOCK_SIZE){
+             //if(j>BLOCK_SIZE) printf("j:%ld\n",j);
+             //printf("a[i*n] = %e\n",*(a_d+i*n));
              reduction_sum<<<j/BLOCK_SIZE,BLOCK_SIZE>>>((a_d+i*n), (a_d+i*n), j);
-	     cudaDeviceSynchronize();
+	     //cudaDeviceSynchronize();
 	     j /= BLOCK_SIZE;
+	     //if(j>BLOCK_SIZE) printf("j:%ld\n",j);
           }
 	  //printf("\nmod size j: %ld\n",j);
           reduction_sum<<<1,j>>>((a_d+i*n), (a_d+i*n), j);
-          cudaDeviceSynchronize();
+          //cudaDeviceSynchronize();
           reduction_sum<<<1,1>>>((c_d+i), (a_d+i*n), 1);
 	  //cudaDeviceSynchronize();
       }

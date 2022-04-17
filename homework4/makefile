@@ -1,5 +1,5 @@
 CXX = nvcc
-CXXFLAGS = -Xcompiler -fopenmp
+CXXFLAGS = -Xcompiler -fopenmp 
 
 TARGETS = $(basename $(wildcard *.cu))
 
