@@ -87,17 +87,18 @@ int main(int argc, char** argv) {
     printf("\nDimension %ld:\n", n);
 
     long NREPEATS = 1;//large dimension, only one repeat
-    double *a, *b, *c, *tmp;
+    double *a, *b, *c;//, *tmp;
     cudaMallocHost((void**)&a, m*n * sizeof(double));
-    cudaMallocHost((void**)&tmp, m*n * sizeof(double));
+    // cudaMallocHost((void**)&tmp, m*n * sizeof(double));
     cudaMallocHost((void**)&b, n * sizeof(double));
-    cudaMallocHost((void**)&c, m * sizeof(double));
+    cudaMallocHost((void**)&c, m*n * sizeof(double));
     double* c_ref = (double*) malloc(m * sizeof(double));
 
     // Initialize matrix and vectors
     #pragma omp parallel for
     for (long i = 0; i < m*n; i++) {
       a[i] = 1;
+      c[i] = 0.;
     }
     
     #pragma omp parallel for
@@ -108,7 +109,7 @@ int main(int argc, char** argv) {
     #pragma omp parallel for
     for (long i=0; i < m; i++) {
       c_ref[i] = 0.;
-      c[i] = 0.;
+    //   c[i] = 0.;
     }
 
 
@@ -118,21 +119,22 @@ int main(int argc, char** argv) {
     }
     printf("CPU Bandwidth = %f GB/s\n", (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
 
-    double *a_d, *b_d, *c_d, *tmp_d;
+    double *a_d, *b_d, *c_d;//, *tmp_d;
     cudaMalloc(&a_d, m*n*sizeof(double));
-    cudaMalloc(&tmp_d, m*n*sizeof(double));
+    // cudaMalloc(&tmp_d, m*n*sizeof(double));
     cudaMalloc(&b_d, n*sizeof(double));
-    cudaMalloc(&c_d, m*sizeof(double));
+    cudaMalloc(&c_d, m*n*sizeof(double));
 
     tt = omp_get_wtime();
     for (long rep = 0; rep < NREPEATS; rep++) { // Compute on GPU (1 stream)
       cudaMemcpyAsync(a_d, a, m*n*sizeof(double), cudaMemcpyHostToDevice);
       cudaMemcpyAsync(b_d, b, n*sizeof(double), cudaMemcpyHostToDevice);
-      smult<<<GridDim,BlockDim>>>(m, n, a_d, b_d, tmp_d, 0);
-      cudaMemcpyAsync(tmp, tmp_d, m*n*sizeof(double), cudaMemcpyDeviceToHost);
+      smult<<<GridDim,BlockDim>>>(m, n, a_d, b_d, c_d, 0);
+    //   cudaMemcpyAsync(tmp, tmp_d, m*n*sizeof(double), cudaMemcpyDeviceToHost);
       cudaDeviceSynchronize();
       for (long i=0; i<m; i++){
-          reduction_sum<<<1,n>>>((c_d+i), (tmp_d+i*n), n);
+          for (long j=n; j>0; j /= BLOCK_SIZE)
+          reduction_sum<<<j/BLOCK_SIZE,BLOCK_SIZE>>>((c_d+i), (c_d+i*n), j);
       }
     //  reduction_sum<<<m/BLOCK_SIZE,BLOCK_SIZE>>>(c_d, a_d, n);
       //reduction_sum<<<1,n>>>(c_d, b_d, n);
