@@ -55,7 +55,7 @@ void jacobi_kernel(long N, double hsqr, double *u, double *unew, double *f, long
 int main() {
 
     const int blockSizeX = 32, blockSizeY = 32;
-    long N = 30 * blockSizeX - 2;
+    long N = 3 * blockSizeX - 2;
     dim3 GridDim((N+2)/blockSizeX, (N+2)/blockSizeY, 1);
     dim3 BlockDim(blockSizeX, blockSizeY, 1);
 
