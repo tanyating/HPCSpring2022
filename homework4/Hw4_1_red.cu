@@ -58,14 +58,16 @@ reduction_sum(double * sum, double * a , long N){
     // means divide x by 2 in each iteration
     for (unsigned int s = blockDim.x/2; s > 0; s>>=1) {
         if (threadIdx.x < s) {
+	    //printf("\n%e + %e",smem[threadIdx.x],smem[threadIdx.x + s]);
             smem[threadIdx.x] += smem[threadIdx.x + s];
+	    //printf(" = %e\n",smem[threadIdx.x]);
         }
         __syncthreads();
     }
     // write to global memory
     if (threadIdx.x == 0){ 
 	sum[blockIdx.x] = smem[threadIdx.x];
-	//printf("\nidx: %d, sum: %e\n",blockIdx.x,sum[blockIdx.x]);
+//	if(N>=BLOCK_SIZE) printf("\nN:%ld, idx: %d, sum: %e\n",N,blockIdx.x,sum[blockIdx.x]);
 }
 }
 
@@ -73,13 +75,13 @@ reduction_sum(double * sum, double * a , long N){
 int main(int argc, char** argv) {
 
 
-  const long PFIRST = 10;
+  const long PFIRST = 8;
   const long PLAST = PFIRST+1;
-  const long PINC = 16;
+  const long PINC = 4;
 
   for (long p = PFIRST; p < PLAST; p += PINC) {
     
-    const int blockSizeX = 32, blockSizeY = 32;
+    const int blockSizeX = BLOCK_SIZE, blockSizeY =BLOCK_SIZE;
     long m = p * blockSizeX, n = p * blockSizeY;
     dim3 GridDim(p, p, 1);
     dim3 BlockDim(blockSizeX, blockSizeY, 1);
@@ -91,7 +93,7 @@ int main(int argc, char** argv) {
     cudaMallocHost((void**)&a, m*n * sizeof(double));
     // cudaMallocHost((void**)&tmp, m*n * sizeof(double));
     cudaMallocHost((void**)&b, n * sizeof(double));
-    cudaMallocHost((void**)&c, m*n * sizeof(double));
+    cudaMallocHost((void**)&c, m * sizeof(double));
     double* c_ref = (double*) malloc(m * sizeof(double));
 
     // Initialize matrix and vectors
@@ -121,20 +123,30 @@ int main(int argc, char** argv) {
 
     double *a_d, *b_d, *c_d;//, *tmp_d;
     cudaMalloc(&a_d, m*n*sizeof(double));
-    // cudaMalloc(&tmp_d, m*n*sizeof(double));
+    //cudaMalloc(&tmp_d, m*n*sizeof(double));
     cudaMalloc(&b_d, n*sizeof(double));
-    cudaMalloc(&c_d, m*n*sizeof(double));
+    cudaMalloc(&c_d, m*sizeof(double));
 
     tt = omp_get_wtime();
     for (long rep = 0; rep < NREPEATS; rep++) { // Compute on GPU (1 stream)
       cudaMemcpyAsync(a_d, a, m*n*sizeof(double), cudaMemcpyHostToDevice);
       cudaMemcpyAsync(b_d, b, n*sizeof(double), cudaMemcpyHostToDevice);
-      smult<<<GridDim,BlockDim>>>(m, n, a_d, b_d, c_d, 0);
+      smult<<<GridDim,BlockDim>>>(m, n, a_d, b_d, a_d, 0);
     //   cudaMemcpyAsync(tmp, tmp_d, m*n*sizeof(double), cudaMemcpyDeviceToHost);
       cudaDeviceSynchronize();
       for (long i=0; i<m; i++){
-          for (long j=n; j>0; j /= BLOCK_SIZE)
-          reduction_sum<<<j/BLOCK_SIZE,BLOCK_SIZE>>>((c_d+i), (c_d+i*n), j);
+          long j = n;
+          while (j>BLOCK_SIZE){
+          //for (long j=n; j>0; j /= BLOCK_SIZE){
+             reduction_sum<<<j/BLOCK_SIZE,BLOCK_SIZE>>>((a_d+i*n), (a_d+i*n), j);
+	     cudaDeviceSynchronize();
+	     j /= BLOCK_SIZE;
+          }
+	  //printf("\nmod size j: %ld\n",j);
+          reduction_sum<<<1,j>>>((a_d+i*n), (a_d+i*n), j);
+          cudaDeviceSynchronize();
+          reduction_sum<<<1,1>>>((c_d+i), (a_d+i*n), 1);
+	  //cudaDeviceSynchronize();
       }
     //  reduction_sum<<<m/BLOCK_SIZE,BLOCK_SIZE>>>(c_d, a_d, n);
       //reduction_sum<<<1,n>>>(c_d, b_d, n);
@@ -142,7 +154,7 @@ int main(int argc, char** argv) {
       cudaMemcpyAsync(c, c_d, m*sizeof(double), cudaMemcpyDeviceToHost);
       //printf("test sum: %e\n",c[0]);
       cudaDeviceSynchronize();
-      //printf("test sum: %e\n",c[0]);
+//      printf("test sum: %e\n",c[0]);
     }
     printf("GPU (1 stream) Bandwidth = %f GB/s\n", (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
     
@@ -170,18 +182,18 @@ int main(int argc, char** argv) {
     for (long j=0; j < n; j++) {
         printf("%e\t", c_ref[j]);
     }
-  */  
+*/    
 
 
     cudaFree(a_d);
     cudaFree(b_d);
     cudaFree(c_d);
-    cudaFree(tmp_d);
+    //cudaFree(tmp_d);
 
     cudaFreeHost(a);
     cudaFreeHost(b);
     cudaFreeHost(c);
-    cudaFreeHost(tmp);
+    //cudaFreeHost(tmp);
     free(c_ref);
   }
 
