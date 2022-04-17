@@ -5,7 +5,7 @@
 #include <omp.h>
 #include <stdlib.h>
 
-const long BLOCK_SIZE = 32;
+const long BLOCK_SIZE = 16;
 // Check errors
 void Check_CUDA_Error(const char *message){
   cudaError_t error = cudaGetLastError();
@@ -75,7 +75,7 @@ reduction_sum(double * sum, double * a , long N){
 int main(int argc, char** argv) {
 
 
-  const long PFIRST = 8;
+  const long PFIRST = 16;
   const long PLAST = PFIRST+1;
   const long PINC = 4;
 
