@@ -28,7 +28,7 @@ void VMult0(long m, long n, double *a, double *b, double *c) {
     }
 }
 
-// kernel function for scalar product on GPU
+// kernel function for vectorized scalar product on GPU
 __global__ 
 void smult(long m, long n, double *a, double *b, double *c, long offset){
   // A: input matrix of size m*n (row-first order)
@@ -43,9 +43,10 @@ void smult(long m, long n, double *a, double *b, double *c, long offset){
 
 }
 
+// kernel function for computing sum in reduction
 __global__ void 
 reduction_sum(double * sum, double * a , long N){
-//    printf("yes\n");
+
     __shared__ double smem[BLOCK_SIZE];
     int idx = (blockIdx.x) * blockDim.x + threadIdx.x;
 
@@ -58,18 +59,14 @@ reduction_sum(double * sum, double * a , long N){
     // means divide x by 2 in each iteration
     for (unsigned int s = blockDim.x/2; s > 0; s>>=1) {
         if (threadIdx.x < s) {
-	    //printf("\n%e + %e",smem[threadIdx.x],smem[threadIdx.x + s]);
             smem[threadIdx.x] += smem[threadIdx.x + s];
-	    //printf(" = %e\n",smem[threadIdx.x]);
         }
         __syncthreads();
     }
     // write to global memory
     if (threadIdx.x == 0){ 
-	sum[blockIdx.x] = smem[threadIdx.x];
-        //printf("yes\n");
-//	if(N>=BLOCK_SIZE) printf("\nN:%ld, idx: %d, sum: %e\n",N,blockIdx.x,sum[blockIdx.x]);
-}
+	    sum[blockIdx.x] = smem[threadIdx.x];
+    }
 }
 
 
@@ -90,18 +87,16 @@ int main(int argc, char** argv) {
     printf("\nDimension %ld:\n", n);
 
     long NREPEATS = 1;//large dimension, only one repeat
-    double *a, *b, *c;//, *tmp;
+    double *a, *b, *c;
     cudaMallocHost((void**)&a, m*n * sizeof(double));
-    // cudaMallocHost((void**)&tmp, m*n * sizeof(double));
     cudaMallocHost((void**)&b, n * sizeof(double));
     cudaMallocHost((void**)&c, m * sizeof(double));
     double* c_ref = (double*) malloc(m * sizeof(double));
-    //printf("Initialize complete\n");
-    // Initialize matrix and vectors
+    
+
     #pragma omp parallel for
     for (long i = 0; i < m*n; i++) {
       a[i] = 1;
-      //c[i] = 0.;
     }
     
     #pragma omp parallel for
@@ -115,16 +110,14 @@ int main(int argc, char** argv) {
       c[i] = 0.;
     }
 
-    //printf("Initialize complete\n");
     double tt = omp_get_wtime();
     for (long rep = 0; rep < NREPEATS; rep++) { // Compute reference solution
       VMult0(m, n, a, b, c_ref);
     }
     printf("CPU Bandwidth = %f GB/s\n", (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
 
-    double *a_d, *b_d, *c_d;//, *tmp_d;
+    double *a_d, *b_d, *c_d;
     cudaMalloc(&a_d, m*n*sizeof(double));
-    //cudaMalloc(&tmp_d, m*n*sizeof(double));
     cudaMalloc(&b_d, n*sizeof(double));
     cudaMalloc(&c_d, m*sizeof(double));
 
@@ -132,72 +125,40 @@ int main(int argc, char** argv) {
     for (long rep = 0; rep < NREPEATS; rep++) { // Compute on GPU (1 stream)
       cudaMemcpyAsync(a_d, a, m*n*sizeof(double), cudaMemcpyHostToDevice);
       cudaMemcpyAsync(b_d, b, n*sizeof(double), cudaMemcpyHostToDevice);
+      // first compute vectorized product between each row of matrix A and vector b
       smult<<<GridDim,BlockDim>>>(m, n, a_d, b_d, a_d, 0);
-    //   cudaMemcpyAsync(tmp, tmp_d, m*n*sizeof(double), cudaMemcpyDeviceToHost);
-      //cudaDeviceSynchronize();
+      // compute reduction sum for each row of new matrix A
       for (long i=0; i<m; i++){
           long j = n;
-          while (j>BLOCK_SIZE){
-          //for (long j=n; j>0; j /= BLOCK_SIZE){
-             //if(j>BLOCK_SIZE) printf("j:%ld\n",j);
-             //printf("a[i*n] = %e\n",*(a_d+i*n));
-             reduction_sum<<<j/BLOCK_SIZE,BLOCK_SIZE>>>((a_d+i*n), (a_d+i*n), j);
-	     //cudaDeviceSynchronize();
-	     j /= BLOCK_SIZE;
-	     //if(j>BLOCK_SIZE) printf("j:%ld\n",j);
+          while (j>BLOCK_SIZE){ // recursively call the reduction sum (starting with the BLOCK_SIZE)
+              reduction_sum<<<j/BLOCK_SIZE,BLOCK_SIZE>>>((a_d+i*n), (a_d+i*n), j);
+	          //cudaDeviceSynchronize();
+	          j /= BLOCK_SIZE;
           }
-	  //printf("\nmod size j: %ld\n",j);
           reduction_sum<<<1,j>>>((a_d+i*n), (a_d+i*n), j);
           //cudaDeviceSynchronize();
           reduction_sum<<<1,1>>>((c_d+i), (a_d+i*n), 1);
-	  //cudaDeviceSynchronize();
       }
-    //  reduction_sum<<<m/BLOCK_SIZE,BLOCK_SIZE>>>(c_d, a_d, n);
-      //reduction_sum<<<1,n>>>(c_d, b_d, n);
-      //printf("test sum: %e\n",c_d[0]);
       cudaMemcpyAsync(c, c_d, m*sizeof(double), cudaMemcpyDeviceToHost);
-      //printf("test sum: %e\n",c[0]);
       cudaDeviceSynchronize();
-//      printf("test sum: %e\n",c[0]);
     }
+
     printf("GPU (1 stream) Bandwidth = %f GB/s\n", (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
     
     double err = 0;
     for (long i = 0; i < m; i++) {
       err = std::max(err, std::abs(c_ref[i] - c[i]));
-      //c[i] = 0; // reinitialize c for stream computation
     }
-    printf("Max Error = %10e\n", err);
-/*
-    printf("\nIntermidate matrix (tmp):\n");
-    for (long i=0; i < m; i++) {
-        for (long j=0; j < n; j++) {
-            printf("%e\t", tmp[i*n+j]);
-        }
-        printf("\n");
-    }
-
-    printf("\nresulting c:\n");
-    for (long j=0; j < n; j++) {
-        printf("%e\t", c[j]);
-    }
-
-    printf("\nresulting cref:\n");
-    for (long j=0; j < n; j++) {
-        printf("%e\t", c_ref[j]);
-    }
-*/    
+    printf("Max Error = %10e\n", err);    
 
 
     cudaFree(a_d);
     cudaFree(b_d);
     cudaFree(c_d);
-    //cudaFree(tmp_d);
 
     cudaFreeHost(a);
     cudaFreeHost(b);
     cudaFreeHost(c);
-    //cudaFreeHost(tmp);
     free(c_ref);
   }
 
