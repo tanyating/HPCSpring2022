@@ -83,11 +83,6 @@ int main(int argc, char** argv) {
     long streamSize = p * BLOCK_SIZE;
     long m = streamSize * nStreams, n = streamSize * nStreams;
     long streamBytes = streamSize * sizeof(double);
-    
-    // const int blockSizeX = BLOCK_SIZE, blockSizeY =BLOCK_SIZE;
-    // long m = p * blockSizeX, n = p * blockSizeY;
-    dim3 GridDim(m/32, n/32, 1);
-    dim3 BlockDim(32, 32, 1);
 
     printf("\nDimension %ld:\n", n);
 
@@ -127,7 +122,10 @@ int main(int argc, char** argv) {
     cudaMalloc(&c_d, m*sizeof(double));
 
     // Compute on GPU (1 stream) with reduction sum
+    dim3 GridDim(m/32, n/32, 1);
+    dim3 BlockDim(32, 32, 1);
     tt = omp_get_wtime();
+
     for (long rep = 0; rep < NREPEATS; rep++) { 
       cudaMemcpyAsync(a_d, a, m*n*sizeof(double), cudaMemcpyHostToDevice);
       cudaMemcpyAsync(b_d, b, n*sizeof(double), cudaMemcpyHostToDevice);
@@ -158,6 +156,7 @@ int main(int argc, char** argv) {
     printf("Max Error = %10e\n", err);    
 
 
+    // Compute on GPU (multiple streams) with reduction sum
     cudaStream_t stream[nStreams];
     for (int i = 0; i < nStreams; ++i)
       cudaStreamCreate(&stream[i]);
@@ -165,8 +164,6 @@ int main(int argc, char** argv) {
     dim3 GridDim1(streamSize/32, streamSize/32, 1);
     dim3 BlockDim1(32, 32, 1);
 
-    
-    // Compute on GPU (multiple streams) with reduction sum
     tt = omp_get_wtime();
     for (int i = 0; i < nStreams; ++i) { 
       int offset = i * streamSize;
