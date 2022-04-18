@@ -1,0 +1,16 @@
+nvcc -Xcompiler -fopenmp  Hw4_1_red.cu  -o Hw4_1_red
+nvcc -Xcompiler -fopenmp  HW4_2.cu  -o HW4_2
+
+Dimension 32768:
+CPU Bandwidth = 11.238453 GB/s
+GPU (1 stream) Bandwidth = 22.665488 GB/s
+Max Error = 0.000000e+00
+GPU (4 streams) Bandwidth = 23.143126 GB/s
+Max Error = 0.000000e+00
+
+Dimension 40960:
+CPU Bandwidth = 11.258135 GB/s
+GPU (1 stream) Bandwidth = 22.851697 GB/s
+Max Error = 0.000000e+00
+GPU (4 streams) Bandwidth = 23.389651 GB/s
+Max Error = 0.000000e+00
