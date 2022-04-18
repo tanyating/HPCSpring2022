@@ -136,13 +136,13 @@ int main(int argc, char** argv) {
       for (long i=0; i<m; i++){
           long j = n;
           while (j>BLOCK_SIZE){ // recursively call the reduction sum (starting with the BLOCK_SIZE)
-              reduction_sum<<<j/BLOCK_SIZE,BLOCK_SIZE>>>((a_d+i*n), (a_d+i*n), j);
+              reduction_sum<<<j/BLOCK_SIZE,BLOCK_SIZE>>>((a_d+i*n), (a_d+i*n), j, 0);
 	          //cudaDeviceSynchronize();
 	          j /= BLOCK_SIZE;
           }
-          reduction_sum<<<1,j>>>((a_d+i*n), (a_d+i*n), j);
+          reduction_sum<<<1,j>>>((a_d+i*n), (a_d+i*n), j, 0);
           //cudaDeviceSynchronize();
-          reduction_sum<<<1,1>>>((c_d+i), (a_d+i*n), 1);
+          reduction_sum<<<1,1>>>((c_d+i), (a_d+i*n), 1, 0);
       }
       cudaMemcpyAsync(c, c_d, m*sizeof(double), cudaMemcpyDeviceToHost);
       cudaDeviceSynchronize();
@@ -161,8 +161,8 @@ int main(int argc, char** argv) {
     for (int i = 0; i < nStreams; ++i)
       cudaStreamCreate(&stream[i]);
     
-    GridDim(streamSize/32, streamSize/32, 1);
-    BlockDim(32, 32, 1);
+    dim3 GridDim1(streamSize/32, streamSize/32, 1);
+    dim3 BlockDim1(32, 32, 1);
 
     
     tt = omp_get_wtime();
@@ -174,20 +174,20 @@ int main(int argc, char** argv) {
       cudaMemcpyAsync(&b_d[offset], &b[offset],
                                 streamBytes, cudaMemcpyHostToDevice,
                                 stream[i]);
-      inn_prod<<<streamSize/blockSize, blockSize, 0, stream[i]>>>(m, n, a_d, b_d, c_d, offset);
+      //inn_prod<<<streamSize/blockSize, blockSize, 0, stream[i]>>>(m, n, a_d, b_d, c_d, offset);
       // first compute vectorized product between each row of matrix A and vector b
-      smult<<<GridDim,BlockDim, 0, stream[i]>>>(m, n, a_d, b_d, a_d, offset);
+      smult<<<GridDim1,BlockDim1, 0, stream[i]>>>(m, n, a_d, b_d, a_d, offset);
       // compute reduction sum for each row of new matrix A
       for (long k=offset; k<offset+streamSize; k++){
           long j = n;
           while (j>BLOCK_SIZE){ // recursively call the reduction sum (starting with the BLOCK_SIZE)
-              reduction_sum<<<j/BLOCK_SIZE,BLOCK_SIZE, 0, stream[i]>>>((a_d+k*n+offset*n), (a_d+k*n+offset*n), j);
+              reduction_sum<<<j/BLOCK_SIZE,BLOCK_SIZE, 0, stream[i]>>>((a_d+k*n+offset*n), (a_d+k*n+offset*n), j, offset);
 	          //cudaDeviceSynchronize();
 	          j /= BLOCK_SIZE;
           }
-          reduction_sum<<<1,j, 0, stream[i]>>>((a_d+k*n+offset*n), (a_d+k*n+offset*n), j);
+          reduction_sum<<<1,j, 0, stream[i]>>>((a_d+k*n+offset*n), (a_d+k*n+offset*n), j, offset);
           //cudaDeviceSynchronize();
-          reduction_sum<<<1,1, 0, stream[i]>>>((c_d+k+offset), (a_d+k*n+offset*n), 1);
+          reduction_sum<<<1,1, 0, stream[i]>>>((c_d+k+offset), (a_d+k*n+offset*n), 1, offset);
       }
       cudaMemcpyAsync(&c[offset], &c_d[offset],
                                 streamBytes, cudaMemcpyDeviceToHost,
