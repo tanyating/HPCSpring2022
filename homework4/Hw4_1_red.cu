@@ -126,8 +126,9 @@ int main(int argc, char** argv) {
     cudaMalloc(&b_d, n*sizeof(double));
     cudaMalloc(&c_d, m*sizeof(double));
 
+    // Compute on GPU (1 stream) with reduction sum
     tt = omp_get_wtime();
-    for (long rep = 0; rep < NREPEATS; rep++) { // Compute on GPU (1 stream)
+    for (long rep = 0; rep < NREPEATS; rep++) { 
       cudaMemcpyAsync(a_d, a, m*n*sizeof(double), cudaMemcpyHostToDevice);
       cudaMemcpyAsync(b_d, b, n*sizeof(double), cudaMemcpyHostToDevice);
       // first compute vectorized product between each row of matrix A and vector b
@@ -148,7 +149,7 @@ int main(int argc, char** argv) {
       cudaDeviceSynchronize();
     }
 
-    printf("GPU (1 stream) Bandwidth = %f GB/s\n", (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
+    printf("GPU with reduction sum (1 stream) Bandwidth = %f GB/s\n", (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
     
     double err = 0;
     for (long i = 0; i < m; i++) {
@@ -165,8 +166,9 @@ int main(int argc, char** argv) {
     dim3 BlockDim1(32, 32, 1);
 
     
+    // Compute on GPU (multiple streams) with reduction sum
     tt = omp_get_wtime();
-    for (int i = 0; i < nStreams; ++i) { // Compute on GPU (multiple streams)
+    for (int i = 0; i < nStreams; ++i) { 
       int offset = i * streamSize;
       cudaMemcpyAsync(&a_d[offset*n], &a[offset*n],
                                 streamBytes*n, cudaMemcpyHostToDevice,
@@ -174,7 +176,6 @@ int main(int argc, char** argv) {
       cudaMemcpyAsync(&b_d[offset], &b[offset],
                                 streamBytes, cudaMemcpyHostToDevice,
                                 stream[i]);
-      //inn_prod<<<streamSize/blockSize, blockSize, 0, stream[i]>>>(m, n, a_d, b_d, c_d, offset);
       // first compute vectorized product between each row of matrix A and vector b
       smult<<<GridDim1,BlockDim1, 0, stream[i]>>>(m, n, a_d, b_d, a_d, offset);
       // compute reduction sum for each row of new matrix A
@@ -194,7 +195,7 @@ int main(int argc, char** argv) {
                                 stream[i]);
     }
     cudaDeviceSynchronize();
-    printf("GPU (%d streams) Bandwidth = %f GB/s\n", nStreams, (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
+    printf("GPU with reduction sum (%d streams) Bandwidth = %f GB/s\n", nStreams, (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
 
     err = 0;
     for (long i = 0; i < m; i++) err = std::max(err, std::abs(c_ref[i] - c[i]));
