@@ -1,0 +1,168 @@
+\documentclass[11pt]{article}
+
+ \renewcommand*\familydefault{\sfdefault}
+%%
+%% to get Arial font as the sans serif font, uncomment following line:
+%% \renewcommand{\sfdefault}{phv} % phv is the Arial font
+\usepackage[sort,nocompress]{cite}
+\usepackage[small,bf,up]{caption}
+\renewcommand{\captionfont}{\footnotesize}
+\usepackage[left=1in,right=1in,top=1in,bottom=1in]{geometry}
+\usepackage{graphics,epsfig,graphicx,float,subfigure,color}
+%\usepackage{algorithm,algorithmic}
+\usepackage{amsmath,amssymb,amsbsy,amsfonts,amsthm}
+\usepackage{url}
+\usepackage{boxedminipage}
+\usepackage[sf,bf,tiny]{titlesec}
+ \usepackage[plainpages=false, colorlinks=true,
+   citecolor=blue, filecolor=blue, linkcolor=blue,
+   urlcolor=blue]{hyperref}
+
+\usepackage{algorithmicx}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xspace}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{sidecap}
+\usepackage{caption}
+\usepackage[numbered,framed]{matlab-prettifier}
+\lstset{
+  style      = Matlab-editor,
+}
+
+\lstset{
+basicstyle=\small\ttfamily,
+numbers=left,
+numbersep=5pt,
+xleftmargin=20pt,
+frame=tb,
+framexleftmargin=20pt
+}
+
+\usepackage{float}
+
+
+\lstset{
+basicstyle=\small\ttfamily,
+numbers=left,
+numbersep=5pt,
+xleftmargin=20pt,
+frame=tb,
+framexleftmargin=20pt
+}
+
+\renewcommand*\thelstnumber{\arabic{lstnumber}:}
+
+\DeclareCaptionFormat{mylst}{\hrule#1#2#3}
+\captionsetup[lstlisting]{format=mylst,labelfont=bf,singlelinecheck=off,labelsep=space}
+
+\usepackage{matlab-prettifier}
+\newcommand{\todo}[1]{\textcolor{red}{#1}}
+% see documentation for titlesec package
+% \titleformat{\section}{\large \sffamily \bfseries}
+\titlelabel{\thetitle.\,\,\,}
+
+\renewcommand{\baselinestretch}{0.994}
+\newcommand{\bs}{\boldsymbol}
+\newcommand{\alert}[1]{\textcolor{red}{#1}}
+\newcommand{\abs}[1]{\left|#1\right|}
+
+\setlength{\emergencystretch}{20pt}
+\usepackage[utf8]{inputenc}
+
+
+\begin{document}
+
+\begin{center}
+\vspace*{-2cm}
+
+\end{center}
+\vspace*{.5cm}
+\begin{center}
+\large \textbf{%%
+Spring 2022: High Performance Computing}\\
+\textbf{ Assignment 4}\\
+\large \textbf{%%
+Tanya Wang (yw3087)}\\
+\end{center}
+
+% ---------------------------------------------------------------
+
+(Note: For each \texttt{.cu} extension file, there's a corresponding \texttt{.sbatch} file which can launch jobs on Greene. And the corresponding \texttt{.out} file is the output from running on the Greene server.) Sometimes the Greene cluster seems to work better with GPU than the CIMS cluster (see details below).
+
+\begin{enumerate}
+    \item {\bf [Matrix-vector operations on a GPU]}
+    \begin{enumerate}
+        \item The \texttt{HW4-1.cu} file implements the GPU code with a kernel function for a \textcolor{blue}{vector-vector dot product} (in other words, this code can only "parallelize" row-wise, but not column-wise for the matrix-vector multiplication on GPU).
+        
+        Observations:
+        \begin{enumerate}
+            \item On the CIMS clusters, the results from the CPU code and GPU codes are the same (0 error), but the GPU somehow takes longer time to run ie. smaller bandwidth for large dimension (which may due to inefficient memory access or memory transfer between CPU and GPU). Still, we see that the GPU code works better for larger dimension, and multiple (4) streams of data transfer are faster than using only 1 stream.\\
+            
+            Below is the table reporting bandwidths for Mat-Vec multiplication (each dimension $N=16384$) on different CIMS clusters.\\
+            
+            \begin{tabular}{c|c|c|c}
+            
+           Cluster & CPU (GB/s)& GPU 1 stream (GB/s) & GPU 4 streams (GB/s) \\ \hline
+            
+            cuda1 & 46.277316 & 12.867805 & 19.703048 \\ \hline
+            cuda2 & 38.685240 & 21.509516 & 21.316811\\ \hline
+            cuda3 & 30.569165 & 22.324082 & 22.195923\\ \hline
+            cuda4 & 41.329080 & 17.699823 & 20.325752\\ \hline
+            cuda5 & 46.693850 & 12.221176 & 19.804474\\ \hline
+            
+            \end{tabular}\\
+            
+            On the Greene cluster (HPC), the \texttt{HW4-1.out} shows that the GPU indeed exceeds CPU in bandwidth as expected.
+            
+            \item The \texttt{HW4-1-red.cu} file implements another version of GPU code, which invokes 2 kernel functions: \textcolor{blue}{vectorized scalar product} and \textcolor{blue}{reduction sum}. In the case, the GPU code "parallelize" element-wise: first compute the scalar product between each element of a single row of the input matrix $A$ and the input vector $\vec b$, and then sum up along each row. This implementation should run faster on GPU since we parallelize both row- and column-wise, but the CIMS clusters still perform unstable with low bandwidths. Also, invoking both kernel functions, especially recursive call of the reduction sum could be time-consuming.\\
+            
+            Below is the table reporting bandwidths for Mat-Vec multiplication with reduction sum (each dimension $N=16384$) on different CIMS clusters.\\
+            
+            \begin{tabular}{c|c|c|c}
+            
+           Cluster & CPU (GB/s)& GPU 1 stream (GB/s) & GPU 4 streams (GB/s) \\ \hline
+            
+            cuda1 & 45.560555 & 7.353472 & 12.745449 \\ \hline
+            cuda2 & 38.337630 & 13.017525 & 19.465050 \\ \hline
+            cuda3 & 33.426746 & 13.139698 & 20.621245\\ \hline
+            cuda4 & 39.796128 & 17.690793 & 19.855752\\ \hline
+            cuda5 & 45.919525 & 7.461254 & 10.803480\\ \hline
+            
+            \end{tabular}\\
+            
+        \end{enumerate}
+        
+    \end{enumerate}
+    
+    
+    \item {\bf [2D Jacobi method on a GPU]}
+    The \texttt{HW4-2.cu} file implements the GPU code with a kernel function for update of all nodes at each time step (in other words, this code "parallelizes" node-wise for each iteration of Jacobi). Still, there's no difference between the results of the first 1000 iterations run on CPU and GPU. But on CIMS clusters, the GPU code sometime runs slower than the CPU code (result is unstable and changes every time), this can be due to inefficient memory access (it's hard to optimize use of shared memory or multi-stream data transfer of Jacobi method due to the \textcolor{blue}{data dependency})..\\
+            
+            Below is the table reporting runtime for first 1000 iterations of Jacobi method (dimension $N=958$) on different CIMS clusters.\\
+            
+            \begin{tabular}{c|c|c}
+            
+           Cluster & CPU (s) & GPU (s) \\ \hline
+            
+            cuda1 & 1.267153 & 2.695189 \\ \hline
+            cuda2 & 0.571452 & 1.896021  \\ \hline
+            cuda3 & 25.935320 & 1.865439  \\ \hline
+            cuda4 & 0.557557 & 2.069930  \\ \hline
+            cuda5 & 0.675230 & 2.586563  \\ \hline
+            
+            \end{tabular}\\
+            
+    On the Greene cluster (HPC), the \texttt{HW4-2.out} shows that the GPU indeed shortens runtime compared to CPU as expected.
+    
+    
+   \item {\bf [Update on final projection]}
+   \begin{enumerate}
+       \item Our group has settled down on our proposal of parallelizing Multigrid to solve advection-diffusion equation. So far, we've been doing quite a lot of research on both the numerical methods (Crank-Nicolson and Multigrid Gauss-Seidel) and the HPC approach (both OMP and CUDA).
+       \item We've started to write up serial code first, which serves as a base for us to parallelize later.
+   \end{enumerate}
+    
+\end{enumerate}
+
+\end{document}
