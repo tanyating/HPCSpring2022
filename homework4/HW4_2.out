@@ -1,6 +1,6 @@
 make: Nothing to be done for 'all'.
 
 Jacobi Method for (dimension) N=958 (first 1000 iterations):
-CPU time elapsed is 2.763315.
-GPU time elapsed is 1.779830.
-Max Difference (compared with CPU) = 2.718334e-04
+CPU time elapsed is 2.797656.
+GPU time elapsed is 1.892050.
+Max Difference (compared with CPU) = 0.000000e+00
