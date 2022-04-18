@@ -140,7 +140,6 @@ int main(int argc, char** argv) {
     for (long i = 0; i < m; i++) err = std::max(err, std::abs(c_ref[i] - c[i]));
     printf("Max Error = %10e\n", err);
 
-
     cudaFree(a_d);
     cudaFree(b_d);
     cudaFree(c_d);
