@@ -5,7 +5,8 @@
 #include <omp.h>
 #include <stdlib.h>
 
-const long BLOCK_SIZE = 1024;
+const long BLOCK_SIZE = 1024; // block size for reduction sum
+
 // Check errors
 void Check_CUDA_Error(const char *message){
   cudaError_t error = cudaGetLastError();
@@ -45,10 +46,10 @@ void smult(long m, long n, double *a, double *b, double *c, long offset){
 
 // kernel function for computing sum in reduction
 __global__ void 
-reduction_sum(double * sum, double * a , long N){
+reduction_sum(double * sum, double * a , long N, long offset){
 
     __shared__ double smem[BLOCK_SIZE];
-    int idx = (blockIdx.x) * blockDim.x + threadIdx.x;
+    int idx = offset + (blockIdx.x) * blockDim.x + threadIdx.x;
 
     // each thread reads data from global into shared memory
     if (idx < N) smem[threadIdx.x] = a[idx];
@@ -65,22 +66,26 @@ reduction_sum(double * sum, double * a , long N){
     }
     // write to global memory
     if (threadIdx.x == 0){ 
-	    sum[blockIdx.x] = smem[threadIdx.x];
+	    sum[blockIdx.x+offset] = smem[threadIdx.x];
     }
 }
 
 
 int main(int argc, char** argv) {
 
-
-  const long PFIRST = 16;
+  const int nStreams = 4;
+  const long PFIRST = 4;
   const long PLAST = PFIRST+1;
   const long PINC = 4;
 
   for (long p = PFIRST; p < PLAST; p += PINC) {
+
+    long streamSize = p * BLOCK_SIZE;
+    long m = streamSize * nStreams, n = streamSize * nStreams;
+    long streamBytes = streamSize * sizeof(double);
     
-    const int blockSizeX = BLOCK_SIZE, blockSizeY =BLOCK_SIZE;
-    long m = p * blockSizeX, n = p * blockSizeY;
+    // const int blockSizeX = BLOCK_SIZE, blockSizeY =BLOCK_SIZE;
+    // long m = p * blockSizeX, n = p * blockSizeY;
     dim3 GridDim(m/32, n/32, 1);
     dim3 BlockDim(32, 32, 1);
 
@@ -150,6 +155,50 @@ int main(int argc, char** argv) {
       err = std::max(err, std::abs(c_ref[i] - c[i]));
     }
     printf("Max Error = %10e\n", err);    
+
+
+    cudaStream_t stream[nStreams];
+    for (int i = 0; i < nStreams; ++i)
+      cudaStreamCreate(&stream[i]);
+    
+    GridDim(streamSize/32, streamSize/32, 1);
+    BlockDim(32, 32, 1);
+
+    
+    tt = omp_get_wtime();
+    for (int i = 0; i < nStreams; ++i) { // Compute on GPU (multiple streams)
+      int offset = i * streamSize;
+      cudaMemcpyAsync(&a_d[offset*n], &a[offset*n],
+                                streamBytes*n, cudaMemcpyHostToDevice,
+                                stream[i]);
+      cudaMemcpyAsync(&b_d[offset], &b[offset],
+                                streamBytes, cudaMemcpyHostToDevice,
+                                stream[i]);
+      inn_prod<<<streamSize/blockSize, blockSize, 0, stream[i]>>>(m, n, a_d, b_d, c_d, offset);
+      // first compute vectorized product between each row of matrix A and vector b
+      smult<<<GridDim,BlockDim, 0, stream[i]>>>(m, n, a_d, b_d, a_d, offset);
+      // compute reduction sum for each row of new matrix A
+      for (long k=offset; k<offset+streamSize; k++){
+          long j = n;
+          while (j>BLOCK_SIZE){ // recursively call the reduction sum (starting with the BLOCK_SIZE)
+              reduction_sum<<<j/BLOCK_SIZE,BLOCK_SIZE, 0, stream[i]>>>((a_d+k*n+offset*n), (a_d+k*n+offset*n), j);
+	          //cudaDeviceSynchronize();
+	          j /= BLOCK_SIZE;
+          }
+          reduction_sum<<<1,j, 0, stream[i]>>>((a_d+k*n+offset*n), (a_d+k*n+offset*n), j);
+          //cudaDeviceSynchronize();
+          reduction_sum<<<1,1, 0, stream[i]>>>((c_d+k+offset), (a_d+k*n+offset*n), 1);
+      }
+      cudaMemcpyAsync(&c[offset], &c_d[offset],
+                                streamBytes, cudaMemcpyDeviceToHost,
+                                stream[i]);
+    }
+    cudaDeviceSynchronize();
+    printf("GPU (%d streams) Bandwidth = %f GB/s\n", nStreams, (2*m+2*m*n)*sizeof(double) / (omp_get_wtime()-tt)/1e9);
+
+    err = 0;
+    for (long i = 0; i < m; i++) err = std::max(err, std::abs(c_ref[i] - c[i]));
+    printf("Max Error = %10e\n", err);
 
 
     cudaFree(a_d);
